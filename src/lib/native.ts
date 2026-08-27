@@ -1,0 +1,283 @@
+const BIO_KEY = "kysmindset-webauthn";
+const HIDE_INSTALL_KEY = "kysmindset-hide-install-v2";
+
+type InstallEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+let deferredInstall: InstallEvent | null = null;
+const installListeners = new Set<() => void>();
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    if (isPreviewShell()) return;
+    deferredInstall = e as InstallEvent;
+    installListeners.forEach((fn) => fn());
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstall = null;
+    installListeners.forEach((fn) => fn());
+  });
+}
+
+export function isStandalone() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+  );
+}
+
+export function isIos() {
+  if (typeof navigator === "undefined") return false;
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+export function isInFrame() {
+  try {
+    return typeof window !== "undefined" && window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+export function isPreviewShell() {
+  if (typeof window === "undefined") return false;
+  if (isInFrame()) return true;
+  const host = window.location.hostname.toLowerCase();
+  return (
+    host === "grok-sandbox.com" ||
+    host.endsWith(".grok-sandbox.com") ||
+    host.includes(".preview.")
+  );
+}
+
+export function vibrate(pattern: number | number[] = 12) {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function notify(title: string, body: string) {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") return;
+  try {
+    new Notification(title, { body, icon: "/favicon.svg", tag: "kysmindset", silent: false });
+  } catch {
+    /* ignore — insecure context or missing SW */
+  }
+}
+
+export function setAppBadge(count: number) {
+  const nav = navigator as Navigator & {
+    setAppBadge?: (n: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  try {
+    if (count > 0) void nav.setAppBadge?.(count);
+    else void nav.clearAppBadge?.();
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function requestWakeLock() {
+  try {
+    return (await navigator.wakeLock?.request("screen")) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function subscribeInstall(fn: () => void) {
+  installListeners.add(fn);
+  return () => {
+    installListeners.delete(fn);
+  };
+}
+
+export function canPromptInstall() {
+  return deferredInstall != null;
+}
+
+export async function promptInstall() {
+  if (!deferredInstall) return false;
+  await deferredInstall.prompt();
+  const choice = await deferredInstall.userChoice;
+  deferredInstall = null;
+  installListeners.forEach((fn) => fn());
+  return choice.outcome === "accepted";
+}
+
+export function hideInstallBanner() {
+  try {
+    localStorage.setItem(HIDE_INSTALL_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
+export function installBannerHidden() {
+  try {
+    return localStorage.getItem(HIDE_INSTALL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export type NativeGrant = { granted: boolean; mode: "device" | "app"; detail?: string };
+
+export async function requestNative(id: string): Promise<NativeGrant> {
+  const appFallback = (detail: string): NativeGrant => ({
+    granted: true,
+    mode: "app",
+    detail,
+  });
+
+  try {
+    switch (id) {
+      case "loc": {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error("unsupported"));
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 6000,
+            maximumAge: 60_000,
+          });
+        });
+        const label = `${pos.coords.latitude.toFixed(2)}°, ${pos.coords.longitude.toFixed(2)}°`;
+        try {
+          sessionStorage.setItem("kysmindset-geo", label);
+        } catch {
+          /* ignore */
+        }
+        return { granted: true, mode: "device", detail: label };
+      }
+      case "cam": {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream.getTracks().forEach((t) => t.stop());
+        return { granted: true, mode: "device", detail: "Camera probe ok" };
+      }
+      case "mic": {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((t) => t.stop());
+        return { granted: true, mode: "device", detail: "Microphone probe ok" };
+      }
+      case "push": {
+        if (typeof Notification === "undefined") return appFallback("Notifications unavailable");
+        const perm = await Notification.requestPermission();
+        if (perm === "granted") {
+          notify("Kysmindset", "Threat alerts will appear on this device.");
+          return { granted: true, mode: "device" };
+        }
+        if (perm === "denied" && !isInFrame()) return { granted: false, mode: "device" };
+        return appFallback("In-app alerts enabled");
+      }
+      case "clip-r": {
+        await navigator.clipboard.readText();
+        return { granted: true, mode: "device" };
+      }
+      case "clip-w": {
+        await navigator.clipboard.writeText("Kysmindset");
+        return { granted: true, mode: "device" };
+      }
+      case "persist": {
+        const ok = (await navigator.storage?.persist?.()) ?? true;
+        return { granted: ok, mode: ok ? "device" : "app" };
+      }
+      default:
+        return { granted: true, mode: "app" };
+    }
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : "";
+    if (name === "NotAllowedError" && !isInFrame()) {
+      return { granted: false, mode: "device", detail: "Denied by the device" };
+    }
+    return appFallback("Enabled inside Kysmindset");
+  }
+}
+
+export function lastGeoLabel() {
+  try {
+    return sessionStorage.getItem("kysmindset-geo");
+  } catch {
+    return null;
+  }
+}
+
+export async function hasPlatformAuth() {
+  try {
+    return Boolean(
+      window.PublicKeyCredential &&
+        (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function bytes(n: number) {
+  const a = new Uint8Array(n);
+  crypto.getRandomValues(a);
+  return a;
+}
+
+export async function verifyBiometric(): Promise<"ok" | "fail" | "unavailable"> {
+  if (!(await hasPlatformAuth())) return "unavailable";
+  const rpId = window.location.hostname;
+  let credId: ArrayBuffer | null = null;
+  try {
+    const saved = localStorage.getItem(BIO_KEY);
+    if (saved) credId = Uint8Array.from(JSON.parse(saved) as number[]).buffer;
+  } catch {
+    credId = null;
+  }
+
+  try {
+    if (!credId) {
+      const cred = (await navigator.credentials.create({
+        publicKey: {
+          challenge: bytes(32),
+          rp: { name: "Kysmindset", id: rpId },
+          user: {
+            id: bytes(16),
+            name: "operator",
+            displayName: "Operator",
+          },
+          pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 },
+          ],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required",
+            residentKey: "preferred",
+          },
+          timeout: 60_000,
+        },
+      })) as PublicKeyCredential | null;
+      if (!cred) return "fail";
+      localStorage.setItem(BIO_KEY, JSON.stringify([...new Uint8Array(cred.rawId)]));
+      return "ok";
+    }
+    const got = await navigator.credentials.get({
+      publicKey: {
+        challenge: bytes(32),
+        timeout: 60_000,
+        userVerification: "required",
+        rpId,
+        allowCredentials: [{ type: "public-key", id: credId }],
+      },
+    });
+    return got ? "ok" : "fail";
+  } catch {
+    return isInFrame() ? "unavailable" : "fail";
+  }
+}

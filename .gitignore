@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.vercel/
+.output/
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.grok/
+artifacts/
+screenshots/
+.prettierrc

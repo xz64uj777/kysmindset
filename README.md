@@ -11,7 +11,7 @@ Security lock screen + live dashboard. Real device/network posture from this app
 - Live HTTPS probes, device posture, tamper log
 - End connection / pause process (app-scope)
 
-This repo is the **web / PWA** app.
+This repo is the **web / PWA** app. Expo Go native wrap is a separate folder if you add it later.
 
 ## Run locally
 
@@ -22,8 +22,12 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (port 8080 in this project).
+Then open the URL Vite prints (this project is set to port 8080).
 
 ## Honest limits
 
 A browser/PWA cannot list other apps, kill OS processes, or cut the whole phone’s data. Kill switch here stops **this app’s** fetches. A real device-wide filter needs an Android APK with `VpnService`.
+
+## License
+
+Private use / your project. Add a license file if you want one.
