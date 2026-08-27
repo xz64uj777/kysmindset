@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Kysmindset</title>
+  <style>
+    :root { --bg:#06080F; --fg:#E8EDF7; --muted:#8B95A8; --subtle:#5A6578; --line:#1E2636; --elev:#151B28; --surf:#0D111A; --cyan:#22D3EE; --red:#F87171; --em:#34D399; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--fg); font-family: system-ui, sans-serif; }
+    button { font: inherit; color: inherit; }
+    #lock, #dash { min-height: 100dvh; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); }
+    .clock { font-size: 64px; font-weight: 200; text-align:center; margin: 24px 0 4px; }
+    .date { text-align:center; color:var(--muted); }
+    .pill { display:inline-block; margin:16px auto; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:rgba(52,211,153,.12); color:var(--em); font-size:12px; font-weight:600; }
+    .pill.hot { background:rgba(248,113,113,.14); color:var(--red); }
+    .center { text-align:center; }
+    .dots { display:flex; justify-content:center; gap:14px; margin: 28px 0 8px; }
+    .dot { width:12px; height:12px; border-radius:6px; border:1px solid var(--line); background:var(--elev); }
+    .dot.on { background:var(--cyan); border-color:var(--cyan); }
+    .pad { display:grid; grid-template-columns:repeat(3,76px); gap:16px; justify-content:center; margin-top:24px; }
+    .key { width:76px; height:76px; border-radius:38px; border:1px solid var(--line); background:var(--elev); font-size:22px; font-weight:300; }
+    .err { color:var(--red); text-align:center; min-height:20px; font-size:13px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+    h1 { font-size:18px; margin:0; }
+    .sub { color:var(--subtle); font-size:11px; margin-top:2px; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; }
+    .chip { padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--elev); font-size:12px; font-weight:600; color:var(--muted); }
+    .chip.hot { background:rgba(248,113,113,.14); color:var(--red); border-color:rgba(248,113,113,.4); }
+    .card, .row { background:var(--surf); border:1px solid var(--line); border-radius:12px; padding:14px; margin-top:10px; }
+    .section { color:var(--subtle); font-size:11px; letter-spacing:1px; font-weight:700; margin-top:16px; }
+    .primary { width:100%; margin-top:12px; background:var(--cyan); color:var(--bg); border:0; border-radius:12px; padding:14px; font-weight:700; }
+    .end { background:rgba(248,113,113,.14); color:var(--red); border:0; border-radius:8px; padding:8px 12px; font-size:12px; font-weight:600; }
+    .banner { background:rgba(248,113,113,.14); border:1px solid rgba(248,113,113,.35); border-radius:12px; padding:14px; margin-top:10px; color:var(--muted); font-size:12px; }
+    .banner b { color:var(--red); display:block; margin-bottom:4px; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .muted { color:var(--muted); font-size:12px; }
+    pre { white-space:pre-wrap; color:var(--muted); font-size:12px; margin:0; }
+    .hidden { display:none !important; }
+  </style>
+</head>
+<body>
+  <div id="lock">
+    <div class="center">
+      <div style="color:var(--muted);font-size:13px;">Kysmindset</div>
+      <div class="clock" id="clock">00:00</div>
+      <div class="date" id="date"></div>
+      <div class="pill" id="pill">Live device monitoring</div>
+    </div>
+    <div class="dots" id="dots"></div>
+    <div class="err" id="err"></div>
+    <div class="pad" id="pad"></div>
+    <p class="center muted" style="margin-top:16px;">Default PIN 1234</p>
+  </div>
+  <div id="dash" class="hidden">
+    <header>
+      <div>
+        <h1>Security Center</h1>
+        <div class="sub" id="linkLine">Reading device…</div>
+      </div>
+      <div class="chips">
+        <button class="chip" id="killBtn" type="button">Kill</button>
+        <button class="chip" id="lockdownBtn" type="button">Lockdown</button>
+        <button class="chip" id="lockBtn" type="button">Lock</button>
+      </div>
+    </header>
+    <div id="killBanner" class="banner hidden"><b>Kill switch armed</b> Outbound probes from this app are blocked before fetch.</div>
+    <div class="card"><div style="color:var(--cyan);font-weight:600;margin-bottom:6px;">This device</div><pre id="device"></pre></div>
+    <button class="primary" id="scanBtn" type="button">Run real posture scan</button>
+    <div class="section">LIVE PROBES</div>
+    <div id="hosts"></div>
+    <p class="muted" style="margin-top:16px;">This APK wraps the app in a WebView. It can block this app’s fetches. It cannot see other apps or cut system data without a VPN service.</p>
+  </div>
+<script>
+const PIN_KEY = "kys_pin";
+const pin = localStorage.getItem(PIN_KEY) || "1234";
+let value = "";
+let kill = false;
+let lockdown = false;
+const PROBES = [
+  { host: "connectivitycheck.gstatic.com", url: "https://connectivitycheck.gstatic.com/generate_204" },
+  { host: "www.gstatic.com", url: "https://www.gstatic.com/generate_204" },
+  { host: "cloudflare.com", url: "https://www.cloudflare.com/cdn-cgi/trace" },
+];
+const blocked = new Set();
+
+function tickClock() {
+  const n = new Date();
+  const hh = String(n.getHours()).padStart(2,"0");
+  const mm = String(n.getMinutes()).padStart(2,"0");
+  document.getElementById("clock").textContent = hh + ":" + mm;
+  document.getElementById("date").textContent = n.toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
+}
+setInterval(tickClock, 1000); tickClock();
+
+const pad = document.getElementById("pad");
+["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach((k) => {
+  const b = document.createElement("button");
+  b.className = "key";
+  b.textContent = k || "";
+  if (!k) { b.disabled = true; b.style.visibility = "hidden"; }
+  b.onclick = () => press(k);
+  pad.appendChild(b);
+});
+function renderDots() {
+  document.getElementById("dots").innerHTML = [0,1,2,3].map(i => `<span class="dot${i < value.length ? " on":""}"></span>`).join("");
+}
+renderDots();
+function press(k) {
+  document.getElementById("err").textContent = "";
+  if (k === "⌫") { value = value.slice(0,-1); renderDots(); return; }
+  if (value.length >= 4) return;
+  value += k;
+  renderDots();
+  if (value.length === 4) {
+    if (value === pin) {
+      document.getElementById("lock").classList.add("hidden");
+      document.getElementById("dash").classList.remove("hidden");
+      value = ""; renderDots();
+      refresh();
+    } else {
+      document.getElementById("err").textContent = "Incorrect PIN";
+      value = ""; renderDots();
+    }
+  }
+}
+
+function deviceInfo() {
+  return [
+    navigator.userAgent,
+    "Online: " + navigator.onLine,
+    "Lang: " + navigator.language,
+    "Cores: " + (navigator.hardwareConcurrency || "?"),
+    "TZ: " + Intl.DateTimeFormat().resolvedOptions().timeZone,
+  ].join("\n");
+}
+
+async function probe(p) {
+  const t0 = Date.now();
+  if (kill || blocked.has(p.host)) {
+    return { ...p, ok:false, ms:0, detail: kill ? "kill-switch" : "blocklist" };
+  }
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(p.url, { cache:"no-store", signal: ctrl.signal });
+    clearTimeout(t);
+    return { ...p, ok: res.ok || res.status === 204, ms: Date.now()-t0, detail: "HTTP " + res.status };
+  } catch (e) {
+    return { ...p, ok:false, ms: Date.now()-t0, detail: String(e.message || e) };
+  }
+}
+
+async function refresh() {
+  document.getElementById("device").textContent = deviceInfo();
+  document.getElementById("linkLine").textContent = kill ? "Kill armed" : (navigator.onLine ? "Online" : "Offline");
+  document.getElementById("killBtn").classList.toggle("hot", kill);
+  document.getElementById("killBtn").textContent = kill ? "Armed" : "Kill";
+  document.getElementById("lockdownBtn").classList.toggle("hot", lockdown);
+  document.getElementById("pill").classList.toggle("hot", kill);
+  document.getElementById("pill").textContent = kill ? "Kill switch armed" : "Live device monitoring";
+  document.getElementById("killBanner").classList.toggle("hidden", !kill);
+  const results = [];
+  for (const p of PROBES) results.push(await probe(p));
+  document.getElementById("hosts").innerHTML = results.map(r => `
+    <div class="row">
+      <div>
+        <div>${r.host}</div>
+        <div class="muted">${r.ok ? "allowed" : "blocked"} · ${r.detail}${r.ms ? " · "+r.ms+"ms" : ""}</div>
+      </div>
+      ${(!r.ok || blocked.has(r.host)) ? "" : `<button class="end" data-host="${r.host}" type="button">End</button>`}
+    </div>`).join("");
+  document.querySelectorAll("[data-host]").forEach(b => b.onclick = () => { blocked.add(b.dataset.host); refresh(); });
+}
+
+document.getElementById("killBtn").onclick = () => { kill = !kill; refresh(); };
+document.getElementById("lockdownBtn").onclick = () => { lockdown = !lockdown; document.getElementById("lockdownBtn").textContent = lockdown ? "Locked" : "Lockdown"; document.getElementById("lockdownBtn").classList.toggle("hot", lockdown); };
+document.getElementById("lockBtn").onclick = () => { document.getElementById("dash").classList.add("hidden"); document.getElementById("lock").classList.remove("hidden"); };
+document.getElementById("scanBtn").onclick = () => refresh();
+</script>
+</body>
+</html>

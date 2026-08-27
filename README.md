@@ -4,16 +4,26 @@ Security lock screen + live dashboard. Real device/network posture from this app
 
 **PIN:** `1234`
 
+## Download the Android APK
+
+GitHub builds a debug APK on every push to `main`.
+
+1. Open [Releases](https://github.com/xz64uj777/kysmindset/releases)
+2. Download `app-debug.apk`
+3. On the phone: allow install from the browser / Files
+4. Play Protect may warn — expected for a debug APK you built yourself
+5. Open **Kysmindset**, PIN `1234`
+
+You can also start a build by hand: repo → **Actions** → **Build Android APK** → **Run workflow**.
+
 ## What’s in here
 
 - Lock screen with PIN
 - Kill switch (blocks this app’s outbound probes)
-- Live HTTPS probes, device posture, tamper log
-- End connection / pause process (app-scope)
+- Live HTTPS probes
+- Android WebView APK (`android/`)
 
-This repo is the **web / PWA** app. Expo Go native wrap is a separate folder if you add it later.
-
-## Run locally
+## Run the web app locally
 
 Needs Node.js 20+.
 
@@ -22,12 +32,6 @@ npm install
 npm run dev
 ```
 
-Then open the URL Vite prints (this project is set to port 8080).
-
 ## Honest limits
 
-A browser/PWA cannot list other apps, kill OS processes, or cut the whole phone’s data. Kill switch here stops **this app’s** fetches. A real device-wide filter needs an Android APK with `VpnService`.
-
-## License
-
-Private use / your project. Add a license file if you want one.
+This APK wraps the app in a WebView. It can block **this app’s** fetches. It cannot list other apps or cut system-wide data without a `VpnService`.
