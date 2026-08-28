@@ -2,6 +2,15 @@ plugins {
     id "com.android.application"
 }
 
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "org.jetbrains.kotlin") {
+            details.useVersion "1.9.24"
+            details.because "align kotlin-stdlib / jdk7 / jdk8 for biometric"
+        }
+    }
+}
+
 android {
     namespace "app.kysmindset.security"
     compileSdk 35
