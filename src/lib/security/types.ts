@@ -86,6 +86,11 @@ export interface AllowItem {
   type: ActivityType;
 }
 
+export interface VpnApp {
+  pkg: string;
+  name: string;
+}
+
 export interface Settings {
   alwaysOn: boolean;
   autoRestart: boolean;
