@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, WifiOff } from "lucide-react";
-import {
-  addTypedVpnAllow,
-  listDeviceApps,
-  loadVpnAllow,
-  saveVpnAllow,
-  type DeviceApp,
-} from "@/lib/native";
+import { listDeviceApps, type DeviceApp } from "@/lib/native";
+import { addTypedVpnAllow, loadVpnAllow, saveVpnAllow } from "@/lib/vpn-allow";
 import { useSecurity } from "@/lib/security/store";
 import { Panel, PanelHeader } from "./chrome";
 import { toast } from "sonner";
@@ -39,7 +34,7 @@ export function KillAllowPanel() {
     setApps(listDeviceApps());
     const added = next.filter((a) => !vpnAllow.some((b) => b.pkg === a.pkg));
     if (added.length) toast.success(`Allowed ${added.map((a) => a.name).join(", ")}`);
-    else toast.error(`No app matched \u201c${query}\u201d`);
+    else toast.error(`No app matched "${query}"`);
     setTyped("");
   };
   const selected = new Set(vpnAllow.map((a) => a.pkg));
@@ -70,7 +65,7 @@ export function KillAllowPanel() {
         <input
           value={typed}
           onChange={(e) => setTyped(e.target.value)}
-          placeholder="Type Facebook, Maps\u2026"
+          placeholder="Type Facebook, Maps..."
           className="flex-1 rounded-sm border border-line bg-elevated px-3 py-2 text-xs text-fg outline-none placeholder:text-subtle focus:border-cyan/50"
         />
         <button type="submit" className="rounded-sm bg-cyan-dim px-3 py-2 text-cyan hover:bg-cyan/20">
@@ -79,18 +74,18 @@ export function KillAllowPanel() {
       </form>
       {apps.length === 0 ? (
         <p className="rounded-md border border-line bg-elevated px-3 py-3 text-xs text-subtle">
-          Installed-app list needs the APK. Typing a name still maps common apps (Facebook \u2192 official package).
+          Installed-app list needs the APK. Typing a name still maps common apps.
         </p>
       ) : (
         <>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter installed apps\u2026"
+            placeholder="Filter installed apps..."
             className="mb-2 w-full rounded-sm border border-line bg-elevated px-3 py-2 text-xs text-fg outline-none placeholder:text-subtle focus:border-cyan/50"
           />
           <p className="mb-2 text-2xs text-subtle">
-            {selected.size} allowed \u00b7 {filtered.length} shown
+            {selected.size} allowed · {filtered.length} shown
           </p>
           <div className="max-h-72 space-y-1 overflow-y-auto pr-1">
             {filtered.map((a) => {
@@ -109,7 +104,7 @@ export function KillAllowPanel() {
                         : "size-5 rounded-sm border border-line-strong"
                     }
                   >
-                    {on ? "\u2713" : ""}
+                    {on ? "✓" : ""}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm text-fg">{a.name}</span>
@@ -130,7 +125,7 @@ export function KillAllowPanel() {
               onClick={() => toggle(a)}
               className="rounded-full border border-cyan/30 bg-cyan-dim px-2 py-0.5 text-2xs text-cyan"
             >
-              {a.name} \u00d7
+              {a.name} ×
             </button>
           ))}
         </div>
