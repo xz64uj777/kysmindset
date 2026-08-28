@@ -1,6 +1,8 @@
 package app.kysmindset.security;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
+import android.net.VpnService;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
@@ -8,6 +10,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
@@ -16,6 +19,7 @@ import androidx.fragment.app.FragmentActivity;
 import java.util.concurrent.Executor;
 
 public class MainActivity extends FragmentActivity {
+    private static final int VPN_REQ = 91;
     private WebView web;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -42,15 +46,63 @@ public class MainActivity extends FragmentActivity {
         web.loadUrl("file:///android_asset/www/index.html");
     }
 
-    private void sendBio(String result) {
+    private void sendEvent(String name, String result) {
         String js =
-            "window.dispatchEvent(new CustomEvent('kys-bio',{detail:'"
+            "window.dispatchEvent(new CustomEvent('"
+                + name
+                + "',{detail:'"
                 + result
                 + "'}))";
         web.post(() -> web.evaluateJavascript(js, null));
     }
 
+    private void sendBio(String result) {
+        sendEvent("kys-bio", result);
+    }
+
+    private void sendKill(String result) {
+        sendEvent("kys-kill", result);
+    }
+
+    private void startVpn() {
+        Intent i = new Intent(this, KillVpnService.class);
+        startService(i);
+        sendKill("on");
+    }
+
+    private void stopVpn() {
+        Intent i = new Intent(this, KillVpnService.class);
+        i.setAction(KillVpnService.ACTION_STOP);
+        startService(i);
+        sendKill("off");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != VPN_REQ) return;
+        if (resultCode == RESULT_OK) startVpn();
+        else sendKill("denied");
+    }
+
     public class KysBridge {
+        @JavascriptInterface
+        public void setKill(boolean on) {
+            runOnUiThread(
+                () -> {
+                    if (!on) {
+                        stopVpn();
+                        return;
+                    }
+                    Intent prep = VpnService.prepare(MainActivity.this);
+                    if (prep != null) {
+                        startActivityForResult(prep, VPN_REQ);
+                    } else {
+                        startVpn();
+                    }
+                });
+        }
+
         @JavascriptInterface
         public void biometric() {
             runOnUiThread(

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from "react";
-import { notify, setAppBadge } from "@/lib/native";
+import { notify, setAppBadge, setDeviceKill } from "@/lib/native";
 import { clamp, uid } from "@/lib/utils";
 import { DEFAULT_PERMISSIONS, HONEYPOT_DEFS, isProtectedName } from "./catalog";
 import {
@@ -321,12 +321,44 @@ export const useSecurity = create<SecurityState>()(
             next ? "Kill switch armed" : "Kill switch released",
             "Network",
             next
-              ? "Third-party fetches from this app are now failed."
-              : "Third-party fetches allowed again.",
+              ? "Arming device air gap (VPN) if the APK can host it."
+              : "Releasing air gap.",
           ),
         });
         syncGuardFrom(get);
         if (next) void probeOutbound().then(() => get().liveTick());
+        void setDeviceKill(next).then((status) => {
+          if (status === "denied") {
+            set({
+              killSwitch: false,
+              history: pushHistory(
+                get().history,
+                "VPN permission denied",
+                "Network",
+                "Air gap needs the Android VPN consent screen. Without it, only this app is blocked.",
+              ),
+            });
+            syncGuardFrom(get);
+          } else if (status === "on") {
+            set({
+              history: pushHistory(
+                get().history,
+                "Device VPN up",
+                "Network",
+                "Other apps should lose internet until Kill is released. Allow the VPN if Android asks.",
+              ),
+            });
+          } else if (status === "app") {
+            set({
+              history: pushHistory(
+                get().history,
+                "App-only kill",
+                "Network",
+                "This build cannot cut Facebook. Use the APK and approve VPN for device-wide air gap.",
+              ),
+            });
+          }
+        });
       },
       toggleLockdown: () => {
         const next = !get().lockdown;
@@ -558,23 +590,26 @@ export const useSecurity = create<SecurityState>()(
       },
       runAiScan: async () => {
         if (get().scanning) return;
-        set({ scanning: true });
+        set({ scanning: true, scanLog: [] });
         const push = (message: string, kind: ScanEvent["kind"]) => {
           set({
             scanLog: [{ id: uid("sc"), at: Date.now(), message, kind }, ...get().scanLog].slice(
               0,
-              60,
+              80,
             ),
           });
         };
-        push("Reading this origin and device APIs…", "info");
+        push("AI engine online — starting posture scan", "info");
+        await wait(280);
         get().liveTick();
         const snap = await snapshotPosture();
         push(
           snap.secure ? "Transport is HTTPS" : "Insecure HTTP — session can be read",
           snap.secure ? "ok" : "threat",
         );
+        await wait(220);
         push(snap.online ? "Device is online" : "Device is offline", snap.online ? "ok" : "learn");
+        await wait(220);
         const flags = await queryPermissionFlags();
         set({
           permissions: get().permissions.map((p) =>
@@ -588,18 +623,28 @@ export const useSecurity = create<SecurityState>()(
             : "No extra device permissions granted",
           "info",
         );
+        await wait(220);
         push(
           snap.sw
             ? "Service worker is controlling this origin"
             : "Service worker not controlling — install the PWA for full intercept",
           snap.sw ? "ok" : "learn",
         );
+        await wait(220);
         push(
           snap.persisted
             ? `Persistent storage on · ${snap.usedMb} / ${snap.quotaMb} MB`
             : `Storage not persisted · ${snap.usedMb} / ${snap.quotaMb} MB`,
           snap.persisted ? "ok" : "learn",
         );
+        await wait(220);
+        push(
+          get().killSwitch
+            ? "Kill switch is armed — checking whether device VPN is up"
+            : "Kill switch is idle (app-only unless VPN is approved)",
+          get().killSwitch ? "learn" : "info",
+        );
+        await wait(220);
         if (snap.thirdPartyHosts.length) {
           push(
             `${snap.thirdPartyHosts.length} third-party host${snap.thirdPartyHosts.length === 1 ? "" : "s"}: ${snap.thirdPartyHosts.slice(0, 6).join(", ")}`,
@@ -616,9 +661,20 @@ export const useSecurity = create<SecurityState>()(
         } else {
           push("No third-party or tracker hosts in this session", "ok");
         }
+        await wait(220);
         if (snap.thirdPartyScripts > 0) {
           push(`${snap.thirdPartyScripts} third-party script(s) in the document`, "learn");
         }
+        const threats = get().activities.filter(
+          (a) => a.status === "suspicious" || a.status === "unknown",
+        );
+        push(
+          threats.length
+            ? `${threats.length} live finding${threats.length === 1 ? "" : "s"} on the board`
+            : "No active findings — board is clear",
+          threats.length ? "threat" : "ok",
+        );
+        await wait(180);
         push("Scan complete", "ok");
         set({ scanning: false, lastScan: Date.now() });
       },

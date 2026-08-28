@@ -48,7 +48,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { ActivityRow } from "./activity-row";
 import { Panel, PanelHeader, ScoreTone, StatusDot } from "./chrome";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InstallBar, useInstallState } from "./install-bar";
 
 function List({
@@ -79,6 +79,8 @@ export function OverviewPanel() {
   const runAiScan = useSecurity((s) => s.runAiScan);
   const indicators = useSecurity((s) => s.indicators);
   const allowlist = useSecurity((s) => s.allowlist);
+  const scanLog = useSecurity((s) => s.scanLog);
+  const killSwitch = useSecurity((s) => s.killSwitch);
   const score = useScore();
   const tone = ScoreTone(score.status);
   const threats = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
@@ -176,6 +178,7 @@ export function OverviewPanel() {
             <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span>
           ) : null}
         </div>
+        <ScanFeed log={scanLog} scanning={scanning} />
         <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
           <MiniStat label="Behavioral profiles" value={allowed.length} />
           <MiniStat label="Threat indicators" value={indicators.length} />
@@ -185,9 +188,62 @@ export function OverviewPanel() {
         <p className="mt-3 text-micro text-muted">
           Always On {settings.alwaysOn ? "enabled" : "off"} · {honeypots.filter((h) => h.armed).length} decoys armed ·{" "}
           {connection.secure ? "Secure" : "Insecure"} link
+          {killSwitch ? " · Air gap armed" : ""}
         </p>
       </Panel>
       <QuickActions />
+    </div>
+  );
+}
+
+function ScanFeed({
+  log,
+  scanning,
+}: {
+  log: { id: string; at: number; message: string; kind: "info" | "threat" | "ok" | "learn" }[];
+  scanning: boolean;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const lines = [...log].reverse();
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [log, scanning]);
+  return (
+    <div
+      ref={box}
+      className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-line bg-bg/60 px-3 py-2 font-mono text-2xs"
+    >
+      {lines.length === 0 && !scanning ? (
+        <p className="py-4 text-center text-subtle">Tap Run AI Scan — live engine output appears here.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {lines.map((e) => (
+            <div key={e.id} className="flex gap-2">
+              <StatusDot
+                tone={
+                  e.kind === "threat" ? "rose" : e.kind === "ok" ? "emerald" : e.kind === "learn" ? "cyan" : "muted"
+                }
+              />
+              <span
+                className={
+                  e.kind === "threat"
+                    ? "text-rose"
+                    : e.kind === "ok"
+                      ? "text-emerald"
+                      : e.kind === "learn"
+                        ? "text-cyan"
+                        : "text-muted"
+                }
+              >
+                {e.message}
+              </span>
+            </div>
+          ))}
+          {scanning ? <div className="text-cyan">▌ analyzing…</div> : null}
+        </div>
+      )}
     </div>
   );
 }

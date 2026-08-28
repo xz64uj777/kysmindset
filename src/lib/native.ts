@@ -86,6 +86,35 @@ export function setAppBadge(count: number) {
   }
 }
 
+export async function setDeviceKill(
+  on: boolean,
+): Promise<"on" | "off" | "denied" | "app"> {
+  const android = (window as unknown as { KysAndroid?: { setKill?: (v: boolean) => void } })
+    .KysAndroid;
+  if (!android || typeof android.setKill !== "function") return "app";
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v: "on" | "off" | "denied" | "app") => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    const onEvt = (e: Event) => {
+      const d = String((e as CustomEvent).detail ?? "");
+      if (d === "on" || d === "off" || d === "denied") finish(d);
+      else finish("denied");
+    };
+    window.addEventListener("kys-kill", onEvt, { once: true });
+    try {
+      android.setKill(on);
+    } catch {
+      finish("denied");
+      return;
+    }
+    window.setTimeout(() => finish(on ? "denied" : "off"), 120_000);
+  });
+}
+
 export async function requestWakeLock() {
   try {
     return (await navigator.wakeLock?.request("screen")) ?? null;
