@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
@@ -13,18 +14,26 @@ import java.io.FileInputStream;
 
 public class KillVpnService extends VpnService {
     public static final String ACTION_STOP = "app.kysmindset.security.STOP_VPN";
+    public static final String ACTION_RESTART = "app.kysmindset.security.RESTART_VPN";
+    public static final String PREFS = "kys";
+    public static final String KEY_ALLOW = "vpn_allow";
     private static final String CH = "kys-airgap";
+    public static volatile boolean active;
     private ParcelFileDescriptor tun;
     private volatile boolean running;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+        String action = intent != null ? intent.getAction() : null;
+        if (ACTION_STOP.equals(action)) {
             stopTunnel();
             stopSelf();
             return START_NOT_STICKY;
         }
         startForegroundNote();
+        if (ACTION_RESTART.equals(action)) {
+            stopTunnel();
+        }
         startTunnel();
         return START_STICKY;
     }
@@ -40,13 +49,18 @@ public class KillVpnService extends VpnService {
         PendingIntent pi =
             PendingIntent.getActivity(
                 this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        int nAllow = allowCount();
+        String text =
+            nAllow == 0
+                ? "All apps blocked until Kill is released"
+                : nAllow + " app" + (nAllow == 1 ? "" : "s") + " allowed through";
         Notification.Builder b =
             Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CH)
                 : new Notification.Builder(this);
         Notification n =
             b.setContentTitle("Kysmindset air gap")
-                .setContentText("Device internet is blocked until Kill is released")
+                .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
                 .setOngoing(true)
@@ -61,6 +75,16 @@ public class KillVpnService extends VpnService {
         }
     }
 
+    private int allowCount() {
+        String raw = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ALLOW, "");
+        if (raw == null || raw.trim().isEmpty()) return 0;
+        int n = 0;
+        for (String p : raw.split("\n")) {
+            if (!p.trim().isEmpty()) n++;
+        }
+        return n;
+    }
+
     private void startTunnel() {
         if (tun != null) return;
         Builder b = new Builder();
@@ -73,10 +97,27 @@ public class KillVpnService extends VpnService {
             b.addRoute("::", 0);
         } catch (Exception ignored) {
         }
+        try {
+            b.addDisallowedApplication(getPackageName());
+        } catch (Exception ignored) {
+        }
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String raw = prefs.getString(KEY_ALLOW, "");
+        if (raw != null) {
+            for (String pkg : raw.split("\n")) {
+                String p = pkg.trim();
+                if (p.isEmpty() || p.equals(getPackageName())) continue;
+                try {
+                    b.addDisallowedApplication(p);
+                } catch (Exception ignored) {
+                }
+            }
+        }
         b.setBlocking(true);
         tun = b.establish();
         if (tun == null) return;
         running = true;
+        active = true;
         Thread t =
             new Thread(
                 () -> {
@@ -100,6 +141,7 @@ public class KillVpnService extends VpnService {
         } catch (Exception ignored) {
         }
         tun = null;
+        active = false;
         stopForeground(true);
     }
 
