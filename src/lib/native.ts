@@ -69,7 +69,7 @@ export function notify(title: string, body: string) {
   try {
     new Notification(title, { body, icon: "/favicon.svg", tag: "kysmindset", silent: false });
   } catch {
-    /* ignore — insecure context or missing SW */
+    /* ignore */
   }
 }
 
@@ -86,11 +86,46 @@ export function setAppBadge(count: number) {
   }
 }
 
+type AndroidBridge = {
+  setKill?: (v: boolean) => void;
+  biometric?: () => void;
+  listApps?: () => string;
+  setAllowlist?: (json: string) => void;
+};
+
+function androidBridge(): AndroidBridge | null {
+  const a = (window as unknown as { KysAndroid?: AndroidBridge }).KysAndroid;
+  return a ?? null;
+}
+
+export type DeviceApp = { pkg: string; name: string };
+
+export function listDeviceApps(): DeviceApp[] {
+  const a = androidBridge();
+  if (!a?.listApps) return [];
+  try {
+    const raw = a.listApps();
+    const parsed = JSON.parse(raw) as DeviceApp[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setVpnAllowlist(pkgs: string[]) {
+  const a = androidBridge();
+  if (!a?.setAllowlist) return;
+  try {
+    a.setAllowlist(JSON.stringify(pkgs));
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function setDeviceKill(
   on: boolean,
 ): Promise<"on" | "off" | "denied" | "app"> {
-  const android = (window as unknown as { KysAndroid?: { setKill?: (v: boolean) => void } })
-    .KysAndroid;
+  const android = androidBridge();
   if (!android || typeof android.setKill !== "function") return "app";
   return new Promise((resolve) => {
     let done = false;
