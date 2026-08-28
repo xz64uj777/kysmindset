@@ -1,4 +1,4 @@
-import { ConfigPanel } from "./panels";
+import { ConfigPanel } from "./config-panel";
 import { KillAllowPanel } from "./kill-allow";
 
 export function ConfigScreen() {
