@@ -1,14 +1,12 @@
 import {
   Bell,
-  EyeOff,
-  History,
+  Brain,
   LayoutGrid,
   Lock,
   Network,
   Power,
   Radar,
   Settings,
-  Shield,
   ShieldAlert,
   ShieldCheck,
   Wifi,
@@ -17,24 +15,17 @@ import {
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
-import type { TabId } from "@/lib/security/types";
+import type { IntelSection, TabId } from "@/lib/security/types";
 import { useSecurity } from "@/lib/security/store";
 import { isStandalone, requestWakeLock, setAppBadge } from "@/lib/native";
 import { cn, timeAgo } from "@/lib/utils";
 import { BgField, StatusDot } from "./chrome";
 import { DecisionDialog, SosDialog } from "./dialogs";
 import { InstallBar } from "./install-bar";
-import {
-  AlertsPanel,
-  HistoryPanel,
-  HoneypotPanel,
-  NetworkPanel,
-  PosturePanel,
-  SystemPanel,
-  TimelinePanel,
-} from "./panels";
+import { AlertsPanel, NetworkPanel, SystemPanel } from "./panels";
 import { ActionLegend } from "./activity-row";
 import { ConfigScreen } from "./config-screen";
+import { IntelPanel } from "./intel-panel";
 import { OverviewPanel } from "./overview-panel";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
@@ -42,12 +33,16 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "alerts", label: "Alerts", icon: Bell },
   { id: "network", label: "Network", icon: Network },
   { id: "system", label: "System", icon: Radar },
-  { id: "honeypot", label: "Honeypot", icon: EyeOff },
-  { id: "timeline", label: "Timeline", icon: History },
-  { id: "posture", label: "Posture", icon: ShieldCheck },
-  { id: "history", label: "History", icon: Shield },
+  { id: "intel", label: "Intel", icon: Brain },
   { id: "config", label: "Config", icon: Settings },
 ];
+
+const INTEL_FROM: Partial<Record<TabId, IntelSection>> = {
+  timeline: "timeline",
+  posture: "posture",
+  history: "history",
+  honeypot: "honeypot",
+};
 
 export function Dashboard() {
   const tab = useSecurity((s) => s.tab);
@@ -324,10 +319,7 @@ export function Dashboard() {
         {tab === "alerts" && <AlertsPanel />}
         {tab === "network" && <NetworkPanel />}
         {tab === "system" && <SystemPanel />}
-        {tab === "honeypot" && <HoneypotPanel />}
-        {tab === "timeline" && <TimelinePanel />}
-        {tab === "posture" && <PosturePanel />}
-        {tab === "history" && <HistoryPanel />}
+        {(tab === "intel" || INTEL_FROM[tab]) && <IntelPanel initial={INTEL_FROM[tab]} />}
         {tab === "config" && <ConfigScreen />}
       </div>
     </div>
