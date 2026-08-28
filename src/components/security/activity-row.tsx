@@ -1,13 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
-import {
-  Ban,
-  Check,
-  Pause,
-  Play,
-  ShieldBan,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { Ban, Check, Info, Pause, Play, Square, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { PORTS } from "@/lib/security/catalog";
@@ -24,6 +16,26 @@ const STATUS_TONE: Record<ActivityStatus, "emerald" | "rose" | "red" | "amber" |
   resolved: "muted",
   paused: "amber",
 };
+
+export function ActionLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-2xs text-subtle">
+      <span>
+        <span className="font-medium text-emerald">Allow</span> keep
+      </span>
+      <span>
+        <span className="font-medium text-red">Block</span> cut host
+      </span>
+      <span>
+        <span className="font-medium text-cyan">Details</span> options
+      </span>
+      <span>
+        <span className="font-medium text-red">End</span> drop now
+      </span>
+      <span className="text-subtle">Tap a name to copy it</span>
+    </div>
+  );
+}
 
 export function ActivityRow({
   item,
@@ -49,115 +61,138 @@ export function ActivityRow({
     else toast.error(`Tamper protection blocked ending ${item.name}`);
   };
 
+  const copyName = async () => {
+    try {
+      await navigator.clipboard.writeText(item.name);
+      toast.success("Copied full name");
+    } catch {
+      toast.message(item.name);
+    }
+  };
+
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-md border border-line bg-elevated/60 px-3 py-2.5",
+        "rounded-md border border-line bg-elevated/60 px-3 py-2.5",
         needsDecision && "border-rose/20 bg-rose-dim/30",
         (dead || item.status === "paused") && "opacity-80",
       )}
     >
-      <span
-        className={cn(
-          "mt-1 size-2 shrink-0 rounded-full",
-          item.status === "allowed" && "bg-emerald",
-          item.status === "suspicious" && "bg-rose",
-          item.status === "unknown" && "bg-amber",
-          item.status === "paused" && "bg-amber",
-          (item.status === "blocked" || item.status === "killed") && "bg-red",
-          item.status === "resolved" && "bg-subtle",
-        )}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-fg">{item.name}</span>
-          <Badge tone={STATUS_TONE[item.status]}>
-            {item.resolveNote === "Network kill switch"
-              ? "dropped"
-              : item.status === "killed"
-                ? "ended"
-                : item.status}
-          </Badge>
-          {item.type === "traffic" && item.direction ? (
-            <span className="text-2xs uppercase tracking-wide text-subtle">{item.direction}</span>
-          ) : null}
-        </div>
-        {!compact ? (
-          <p className="mt-0.5 line-clamp-2 text-micro text-muted">
-            {item.resolveNote && dead ? item.resolveNote : item.details}
-            {portMeta ? ` · ${portMeta.name}` : null}
-            {item.destination ? ` · ${item.destination}${port ? `:${port}` : ""}` : null}
-            {item.source ? ` · from ${item.source}` : null}
-          </p>
-        ) : null}
-        <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-2xs text-subtle">
-          {item.type === "traffic" && item.dataKb != null ? <span>{formatKb(item.dataKb)}</span> : null}
-          {(item.type === "process" || item.type === "app") && item.cpu != null ? (
-            <span>{item.cpu}% CPU</span>
-          ) : null}
-          {item.memoryMb != null ? <span>{item.memoryMb} MB</span> : null}
-          <span>{timeAgo(item.createdAt)}</span>
-        </div>
-        {(item.type === "process" || item.type === "app") && item.cpu != null && !compact ? (
-          <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/5">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                item.status === "paused"
-                  ? "bg-amber"
-                  : item.cpu > 50
-                    ? "bg-rose"
-                    : item.cpu > 20
-                      ? "bg-amber"
-                      : "bg-emerald",
-              )}
-              style={{ width: `${Math.min(item.cpu, 100)}%` }}
-            />
+      <div className="flex items-start gap-2.5">
+        <span
+          className={cn(
+            "mt-1.5 size-2 shrink-0 rounded-full",
+            item.status === "allowed" && "bg-emerald",
+            item.status === "suspicious" && "bg-rose",
+            item.status === "unknown" && "bg-amber",
+            item.status === "paused" && "bg-amber",
+            (item.status === "blocked" || item.status === "killed") && "bg-red",
+            item.status === "resolved" && "bg-subtle",
+          )}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start gap-1.5">
+            <button
+              type="button"
+              onClick={copyName}
+              title="Tap to copy full name"
+              className="min-w-0 max-w-full break-all text-left text-sm font-medium leading-snug text-fg"
+            >
+              {item.name}
+            </button>
+            <Badge tone={STATUS_TONE[item.status]}>
+              {item.resolveNote === "Network kill switch"
+                ? "dropped"
+                : item.status === "killed"
+                  ? "ended"
+                  : item.status}
+            </Badge>
+            {item.type === "traffic" && item.direction ? (
+              <span className="text-2xs uppercase tracking-wide text-subtle">{item.direction}</span>
+            ) : null}
           </div>
-        ) : null}
+          {!compact ? (
+            <p className="mt-0.5 break-words text-micro text-muted">
+              {item.resolveNote && dead ? item.resolveNote : item.details}
+              {portMeta ? ` · ${portMeta.name}` : null}
+              {item.destination ? ` · ${item.destination}${port ? `:${port}` : ""}` : null}
+              {item.source ? ` · from ${item.source}` : null}
+            </p>
+          ) : null}
+          <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-2xs text-subtle">
+            {item.type === "traffic" && item.dataKb != null ? <span>{formatKb(item.dataKb)}</span> : null}
+            {(item.type === "process" || item.type === "app") && item.cpu != null ? (
+              <span>{item.cpu}% CPU</span>
+            ) : null}
+            {item.memoryMb != null ? <span>{item.memoryMb} MB</span> : null}
+            <span>{timeAgo(item.createdAt)}</span>
+          </div>
+          {(item.type === "process" || item.type === "app") && item.cpu != null && !compact ? (
+            <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-white/5">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  item.status === "paused"
+                    ? "bg-amber"
+                    : item.cpu > 50
+                      ? "bg-rose"
+                      : item.cpu > 20
+                        ? "bg-amber"
+                        : "bg-emerald",
+                )}
+                style={{ width: `${Math.min(item.cpu, 100)}%` }}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
       {!compact ? (
-        <div className="flex shrink-0 gap-0.5">
+        <div className="mt-2 flex flex-wrap gap-1.5 pl-5">
           {needsDecision ? (
             <>
-              <IconBtn title="Allow" onClick={() => allow(item.id)} className="text-emerald hover:bg-emerald-dim">
-                <Check className="size-3.5" />
-              </IconBtn>
-              <IconBtn title="Block" onClick={() => block(item.id)} className="text-red hover:bg-red-dim">
-                <Ban className="size-3.5" />
-              </IconBtn>
-              <IconBtn title="More Info" onClick={() => setPending(item)} className="text-cyan hover:bg-cyan-dim">
-                <ShieldBan className="size-3.5" />
-              </IconBtn>
+              <Chip title="Allow this host to keep talking" onClick={() => allow(item.id)} className="text-emerald border-emerald/25 bg-emerald-dim">
+                <Check className="size-3" />
+                Allow
+              </Chip>
+              <Chip title="Block this host" onClick={() => block(item.id)} className="text-red border-red/25 bg-red-dim">
+                <Ban className="size-3" />
+                Block
+              </Chip>
+              <Chip title="More options" onClick={() => setPending(item)} className="text-cyan border-cyan/25 bg-cyan-dim">
+                <Info className="size-3" />
+                Details
+              </Chip>
             </>
           ) : null}
           {item.type === "process" && item.status === "paused" ? (
-            <IconBtn
+            <Chip
               title="Resume process"
               onClick={() => {
                 resume(item.id);
                 toast.success(`Resumed ${item.name}`);
               }}
-              className="text-emerald hover:bg-emerald-dim"
+              className="text-emerald border-emerald/25 bg-emerald-dim"
             >
-              <Play className="size-3.5" />
-            </IconBtn>
+              <Play className="size-3" />
+              Resume
+            </Chip>
           ) : null}
           {item.type === "process" && !dead && item.status !== "paused" ? (
-            <IconBtn
+            <Chip
               title="Pause process"
               onClick={() => {
                 const ok = pause(item.id);
                 if (ok) toast.success(`Paused ${item.name}`);
                 else toast.error(`Tamper protection blocked pausing ${item.name}`);
               }}
-              className="text-amber hover:bg-amber-dim"
+              className="text-amber border-amber/25 bg-amber-dim"
             >
-              <Pause className="size-3.5" />
-            </IconBtn>
+              <Pause className="size-3" />
+              Pause
+            </Chip>
           ) : null}
           {(item.type === "process" || item.type === "app") && !dead ? (
-            <IconBtn
+            <Chip
               title={item.type === "app" ? "Stop app" : "Stop process"}
               onClick={() =>
                 endItem(
@@ -165,19 +200,21 @@ export function ActivityRow({
                   `Stopped ${item.name}`,
                 )
               }
-              className="text-red hover:bg-red-dim"
+              className="text-red border-red/25 bg-red-dim"
             >
-              <Square className="size-3.5" />
-            </IconBtn>
+              <Square className="size-3" />
+              Stop
+            </Chip>
           ) : null}
           {item.type === "traffic" && !dead ? (
-            <IconBtn
-              title="End connection"
+            <Chip
+              title="End this connection"
               onClick={() => endItem("Connection reset by user", `Ended ${item.name}`)}
-              className="text-red hover:bg-red-dim"
+              className="text-red border-red/25 bg-red-dim"
             >
-              <Trash2 className="size-3.5" />
-            </IconBtn>
+              <XCircle className="size-3" />
+              End
+            </Chip>
           ) : null}
         </div>
       ) : null}
@@ -185,7 +222,7 @@ export function ActivityRow({
   );
 }
 
-function IconBtn({
+function Chip({
   children,
   className,
   title,
@@ -196,7 +233,10 @@ function IconBtn({
       type="button"
       title={title}
       aria-label={title}
-      className={cn("rounded-md p-2.5 transition-colors hover:bg-white/10", className)}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-2xs font-medium",
+        className,
+      )}
       {...props}
     >
       {children}
