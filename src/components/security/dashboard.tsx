@@ -26,7 +26,6 @@ import { DecisionDialog, SosDialog } from "./dialogs";
 import { InstallBar } from "./install-bar";
 import {
   AlertsPanel,
-  ConfigPanel,
   HistoryPanel,
   HoneypotPanel,
   NetworkPanel,
@@ -35,6 +34,7 @@ import {
   SystemPanel,
   TimelinePanel,
 } from "./panels";
+import { ConfigScreen } from "./config-screen";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
@@ -324,7 +324,7 @@ export function Dashboard() {
         {tab === "timeline" && <TimelinePanel />}
         {tab === "posture" && <PosturePanel />}
         {tab === "history" && <HistoryPanel />}
-        {tab === "config" && <ConfigPanel />}
+        {tab === "config" && <ConfigScreen />}
       </div>
     </div>
   );
