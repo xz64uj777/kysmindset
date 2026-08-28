@@ -10,7 +10,6 @@ export const PORTS: Record<
   8443: { name: "HTTPS Alt", desc: "Alternate HTTPS port", risk: "low" },
 };
 
-/** Public tracker / ad hosts — matched against real Resource Timing. */
 export const TRACKER_HOSTS = [
   "google-analytics.com",
   "googletagmanager.com",
@@ -86,5 +85,5 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { id: "push", name: "Notifications", description: "System notifications", granted: false, risk: "low" },
   { id: "clip-r", name: "Clipboard Read", description: "Reads copied data", granted: false, risk: "medium" },
   { id: "clip-w", name: "Clipboard Write", description: "Writes to clipboard", granted: false, risk: "low" },
-  { id: "persist", name: "Storage", description: "Persistent storage", granted: false, risk: "low" },
+  { id: "persist", name: "Storage", description: "App data and media access", granted: true, risk: "low" },
 ];
