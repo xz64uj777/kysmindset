@@ -1,6 +1,4 @@
 import {
-  Bell,
-  Brain,
   LayoutGrid,
   Lock,
   Network,
@@ -12,7 +10,6 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import type { IntelSection, TabId } from "@/lib/security/types";
@@ -22,7 +19,7 @@ import { cn, timeAgo } from "@/lib/utils";
 import { BgField, StatusDot } from "./chrome";
 import { DecisionDialog, SosDialog } from "./dialogs";
 import { InstallBar } from "./install-bar";
-import { AlertsPanel, NetworkPanel, SystemPanel } from "./panels";
+import { NetworkPanel } from "./network-panel";
 import { ActionLegend } from "./activity-row";
 import { ConfigScreen } from "./config-screen";
 import { IntelPanel } from "./intel-panel";
@@ -30,14 +27,13 @@ import { OverviewPanel } from "./overview-panel";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
-  { id: "alerts", label: "Alerts", icon: Bell },
   { id: "network", label: "Network", icon: Network },
   { id: "system", label: "System", icon: Radar },
-  { id: "intel", label: "Intel", icon: Brain },
   { id: "config", label: "Config", icon: Settings },
 ];
 
-const INTEL_FROM: Partial<Record<TabId, IntelSection>> = {
+const SYSTEM_FROM: Partial<Record<TabId, IntelSection>> = {
+  intel: "runtime",
   timeline: "timeline",
   posture: "posture",
   history: "history",
@@ -63,10 +59,6 @@ export function Dashboard() {
   const [sos, setSos] = useState(false);
 
   const threats = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
-  const blocked = activities.filter((a) => a.status === "blocked" || a.status === "killed");
-  const allowed = activities.filter((a) => a.status === "allowed");
-  const netN = threats.filter((a) => a.type === "traffic").length;
-  const sysN = threats.filter((a) => a.type === "process" || a.type === "app").length;
 
   useEffect(() => {
     const id = window.setInterval(() => liveTick(), 2000);
@@ -102,12 +94,6 @@ export function Dashboard() {
   useEffect(() => {
     setAppBadge(threats.length);
   }, [threats.length]);
-
-  const badges: Partial<Record<TabId, number>> = {
-    alerts: threats.length,
-    network: netN,
-    system: sysN,
-  };
 
   return (
     <div className="relative min-h-dvh bg-bg text-fg">
@@ -207,8 +193,7 @@ export function Dashboard() {
           <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
             {TABS.map((t) => {
               const Icon = t.icon;
-              const active = tab === t.id;
-              const badge = badges[t.id] ?? 0;
+              const active = tab === t.id || (t.id === "system" && SYSTEM_FROM[tab]);
               return (
                 <button
                   key={t.id}
@@ -223,11 +208,6 @@ export function Dashboard() {
                 >
                   <Icon className="size-3.5" />
                   {t.label}
-                  {badge > 0 ? (
-                    <span className="rounded-full bg-rose px-1.5 py-0.5 text-2xs font-bold text-bg">
-                      {badge}
-                    </span>
-                  ) : null}
                 </button>
               );
             })}
@@ -285,81 +265,16 @@ export function Dashboard() {
           </div>
         ) : null}
 
-        <div className="mb-2.5 space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-3">
-              <Legend tone="emerald" label="Allowed" />
-              <Legend tone="rose" label="Threats" />
-              <Legend tone="red" label="Blocked" />
-              <Legend tone="teal" label="Resolved" />
-            </div>
-            {killSwitch ? (
-              <div className="flex items-center gap-1.5 text-2xs font-medium text-red">
-                <span className="live-dot size-1.5 rounded-full bg-red" />
-                Air gap · 0 KB/s
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-2xs font-medium text-emerald">
-                <span className="live-dot size-1.5 rounded-full bg-emerald" />
-                Live · {linkKbps} KB/s
-              </div>
-            )}
+        {tab === "network" ? (
+          <div className="mb-3">
+            <ActionLegend />
           </div>
-          {tab === "alerts" || tab === "network" || tab === "system" ? <ActionLegend /> : null}
-        </div>
-
-        <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          <StatCard icon={<ShieldCheck className="size-4" />} label="Allowed" value={allowed.length} tone="emerald" />
-          <StatCard icon={<Bell className="size-4" />} label="Threats" value={threats.length} tone="rose" />
-          <StatCard icon={<WifiOff className="size-4" />} label="Blocked" value={blocked.length} tone="red" />
-          <StatCard icon={<Radar className="size-4" />} label="Monitored" value={activities.length} tone="cyan" />
-        </div>
+        ) : null}
 
         {tab === "overview" && <OverviewPanel />}
-        {tab === "alerts" && <AlertsPanel />}
         {tab === "network" && <NetworkPanel />}
-        {tab === "system" && <SystemPanel />}
-        {(tab === "intel" || INTEL_FROM[tab]) && <IntelPanel initial={INTEL_FROM[tab]} />}
+        {(tab === "system" || SYSTEM_FROM[tab]) && <IntelPanel initial={SYSTEM_FROM[tab] ?? "runtime"} />}
         {tab === "config" && <ConfigScreen />}
-      </div>
-    </div>
-  );
-}
-
-function Legend({ tone, label }: { tone: "emerald" | "rose" | "red" | "teal"; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <StatusDot tone={tone} />
-      <span className="text-micro text-muted">{label}</span>
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-  tone: "emerald" | "rose" | "red" | "cyan";
-}) {
-  const colors = {
-    emerald: "text-emerald",
-    rose: "text-rose",
-    red: "text-red",
-    cyan: "text-cyan",
-  };
-  return (
-    <div className="flex items-center gap-2.5 rounded-md border border-line bg-surface px-3 py-2.5">
-      <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-sm bg-elevated", colors[tone])}>
-        {icon}
-      </div>
-      <div>
-        <div className="text-lg font-bold leading-none text-fg tabular-nums">{value}</div>
-        <div className="mt-0.5 text-2xs text-subtle">{label}</div>
       </div>
     </div>
   );
