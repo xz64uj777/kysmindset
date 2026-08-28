@@ -1,4 +1,4 @@
-import { Activity, Brain, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Activity, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Trash2, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -50,26 +50,64 @@ export function OverviewPanel() {
     },
   ];
 
+  const copySnapshot = async () => {
+    const text = [
+      `Kysmindset ${score.grade} ${score.score} · ${score.label}`,
+      `Link ${connection.secure ? "HTTPS" : "HTTP"} · ${connection.effectiveType}`,
+      killSwitch ? "Kill switch armed" : "Kill switch idle",
+      `Decoys ${honeypots.filter((h) => h.armed).length}/${honeypots.length}`,
+      lastScan ? `Last scan ${new Date(lastScan).toISOString()}` : "No scan yet",
+      score.factors.map((f) => `- ${f.label} (−${f.deduction})`).join("\n"),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Posture snapshot copied");
+    } catch {
+      toast.message(text);
+    }
+  };
+
   return (
     <div className="space-y-4">
+      <Panel>
+        <PanelHeader icon={<Radar className="size-4" />} title="AI Security Engine" subtitle="Analyzes, learns & decides" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => void runAiScan()} disabled={scanning}>
+            {scanning ? "Scanning..." : "Run AI Scan"}
+          </Button>
+          {lastScan ? <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span> : null}
+        </div>
+        <p className="mt-3 text-micro text-muted">
+          Always On {settings.alwaysOn ? "on" : "off"} · {honeypots.filter((h) => h.armed).length} decoys ·{" "}
+          {connection.secure ? "Secure" : "Insecure"} link
+          {killSwitch ? " · Air gap" : ""} · {allowlist.length} trusted · {indicators.length} learned indicators
+        </p>
+      </Panel>
+      <Panel>
+        <PanelHeader icon={<Terminal className="size-4" />} title="Live feed" subtitle="Engine output while a scan runs" />
+        <ScanFeed log={scanLog} scanning={scanning} />
+      </Panel>
+      <QuickActions />
       <Panel>
         <PanelHeader
           icon={<ShieldCheck className={cn("size-4", tone.color)} />}
           title="Security Score"
-          subtitle="Real-time posture assessment"
+          subtitle="Real-time posture"
           iconClass={tone.bg}
         />
-        <div className="flex items-center gap-4">
-          <div className={cn("text-5xl font-bold tabular-nums", tone.color)}>{score.score}</div>
-          <div>
-            <div className={cn("text-lg font-bold", tone.color)}>Grade {score.grade}</div>
-            <div className="text-xs text-muted">{score.label}</div>
+        <div className="flex items-end justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className={cn("text-5xl font-bold tabular-nums", tone.color)}>{score.score}</div>
+            <div>
+              <div className={cn("text-lg font-bold", tone.color)}>Grade {score.grade}</div>
+              <div className="text-xs text-muted">{score.label}</div>
+            </div>
           </div>
-        </div>
-        <div className="mt-4 space-y-1.5 text-micro">
-          <Row k="Threats detected" v={`-${threats.length * 8}`} tone="text-rose" />
-          <Row k="Items blocked" v={String(blocked.length)} tone="text-red" />
-          <Row k="Known safe" v={String(allowed.length)} tone="text-emerald" />
+          <Button size="sm" variant="ghost" onClick={() => void copySnapshot()}>
+            Copy snapshot
+          </Button>
         </div>
         {score.factors.length > 0 ? (
           <ul className="mt-3 space-y-1 text-micro text-muted">
@@ -81,34 +119,7 @@ export function OverviewPanel() {
             ))}
           </ul>
         ) : null}
-      </Panel>
-      <Panel>
-        <PanelHeader icon={<Radar className="size-4" />} title="AI Security Engine" subtitle="Analyzes, learns & decides" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => void runAiScan()} disabled={scanning}>
-            {scanning ? "Scanning..." : "Run AI Scan"}
-          </Button>
-          {lastScan ? <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span> : null}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-          <MiniStat label="Behavioral profiles" value={allowed.length} />
-          <MiniStat label="Threat indicators" value={indicators.length} />
-          <MiniStat label="Trusted items" value={allowlist.length} />
-          <MiniStat label="Threats neutralized" value={blocked.length} />
-        </div>
-        <p className="mt-3 text-micro text-muted">
-          Always On {settings.alwaysOn ? "enabled" : "off"} · {honeypots.filter((h) => h.armed).length} decoys armed ·{" "}
-          {connection.secure ? "Secure" : "Insecure"} link
-          {killSwitch ? " · Air gap armed" : ""}
-        </p>
-      </Panel>
-      <Panel>
-        <PanelHeader icon={<Terminal className="size-4" />} title="Live feed" subtitle="Engine output while a scan runs" />
-        <ScanFeed log={scanLog} scanning={scanning} />
-      </Panel>
-      <Panel>
-        <PanelHeader icon={<Brain className="size-4" />} title="Security Dimensions" subtitle="Live posture channels" />
-        <div className="space-y-3">
+        <div className="mt-4 space-y-3">
           {dims.map((d) => (
             <div key={d.name}>
               <div className="mb-1 flex justify-between text-micro">
@@ -122,8 +133,10 @@ export function OverviewPanel() {
             </div>
           ))}
         </div>
+        <p className="mt-3 text-2xs text-subtle">
+          {allowed.length} known safe · {blocked.length} cut this session
+        </p>
       </Panel>
-      <QuickActions />
     </div>
   );
 }
@@ -169,32 +182,15 @@ function ScanFeed({
   );
 }
 
-function Row({ k, v, tone }: { k: string; v: string; tone: string }) {
-  return (
-    <div className="flex justify-between text-muted">
-      <span>{k}</span>
-      <span className={cn("tabular-nums", tone)}>{v}</span>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-md border border-line bg-elevated p-2.5">
-      <div className="text-lg font-bold text-fg tabular-nums">{value}</div>
-      <div className="text-2xs text-subtle">{label}</div>
-    </div>
-  );
-}
-
 function QuickActions() {
   const resolveAllThreats = useSecurity((s) => s.resolveAllThreats);
   const clearResolved = useSecurity((s) => s.clearResolved);
   const refresh = useSecurity((s) => s.refresh);
   const killSwitch = useSecurity((s) => s.killSwitch);
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
-  const threats = useSecurity(
-    (s) => s.activities.filter((a) => a.status === "suspicious" || a.status === "unknown").length,
+  const setTab = useSecurity((s) => s.setTab);
+  const pending = useSecurity(
+    (s) => s.activities.filter((a) => a.status === "suspicious" || a.status === "unknown"),
   );
   const resolved = useSecurity(
     (s) => s.activities.filter((a) => a.status === "blocked" || a.status === "killed" || a.status === "resolved").length,
@@ -203,7 +199,7 @@ function QuickActions() {
     {
       key: "kill",
       label: killSwitch ? "Release Kill Switch" : "Arm Kill Switch",
-      desc: killSwitch ? "Restore all dropped sessions" : "Cut every inbound and outbound socket",
+      desc: killSwitch ? "Restore dropped sessions" : "Cut inbound and outbound",
       color: killSwitch
         ? "text-red border-red/40 bg-red-dim hover:bg-red/20"
         : "text-red border-red/20 bg-red-dim hover:bg-red/20",
@@ -218,17 +214,17 @@ function QuickActions() {
     },
     {
       key: "block",
-      label: "Block All Threats",
-      desc: `Block ${threats} suspicious items`,
+      label: "Block open items",
+      desc: pending.length ? "Cut everything still waiting" : "Nothing waiting",
       color: "text-red border-red/20 bg-red-dim hover:bg-red/20",
       icon: ShieldAlert,
       onClick: resolveAllThreats,
-      disabled: threats === 0,
+      disabled: pending.length === 0,
     },
     {
       key: "clear",
-      label: "Clear Resolved",
-      desc: `Remove ${resolved} resolved items`,
+      label: "Clear resolved",
+      desc: resolved ? "Remove finished rows" : "Board already clean",
       color: "text-muted border-line bg-elevated hover:bg-white/10",
       icon: Trash2,
       onClick: clearResolved,
@@ -236,8 +232,8 @@ function QuickActions() {
     },
     {
       key: "refresh",
-      label: "Refresh Data",
-      desc: "Reload all monitors",
+      label: "Refresh",
+      desc: "Reload monitors",
       color: "text-cyan border-cyan/20 bg-cyan-dim hover:bg-cyan/20",
       icon: RefreshCw,
       onClick: refresh,
@@ -246,7 +242,16 @@ function QuickActions() {
   ];
   return (
     <Panel>
-      <PanelHeader icon={<Activity className="size-4" />} title="Quick Actions" subtitle="One-tap security operations" iconClass="bg-elevated text-muted" />
+      <PanelHeader icon={<Activity className="size-4" />} title="Actions" subtitle="One-tap operations" iconClass="bg-elevated text-muted" />
+      {pending.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => setTab("network")}
+          className="mb-3 w-full rounded-md border border-rose/25 bg-rose-dim/40 px-3 py-2 text-left text-xs text-rose"
+        >
+          Open items are on Network — tap to review hosts
+        </button>
+      ) : null}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {actions.map((a) => {
           const Icon = a.icon;
