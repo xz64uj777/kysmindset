@@ -23,13 +23,15 @@ export type TabId =
   | "history";
 
 export const LEGACY_TABS: Record<string, TabId> = {
-  honeypot: "intel",
-  timeline: "intel",
-  posture: "intel",
-  history: "intel",
+  alerts: "network",
+  intel: "system",
+  honeypot: "system",
+  timeline: "system",
+  posture: "system",
+  history: "system",
 };
 
-export type IntelSection = "timeline" | "posture" | "history" | "honeypot";
+export type IntelSection = "runtime" | "timeline" | "posture" | "history" | "honeypot";
 
 export interface SecurityActivity {
   id: string;
