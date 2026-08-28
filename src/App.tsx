@@ -1,12 +1,15 @@
 import { Component, useEffect, type ErrorInfo, type ReactNode } from "react";
 import { Dashboard } from "@/components/security/dashboard";
 import { LockScreen } from "@/components/security/lock-screen";
+import { setAndroidDeviceLock, setAndroidGate } from "@/lib/android-lock";
 import { useSecurity } from "@/lib/security/store";
 
 export function App() {
   const hydrated = useSecurity((s) => s.hydrated);
   const unlocked = useSecurity((s) => s.unlocked);
   const setHydrated = useSecurity((s) => s.setHydrated);
+  const lock = useSecurity((s) => s.lock);
+  const deviceLock = useSecurity((s) => s.settings.deviceLock !== false);
 
   useEffect(() => {
     setHydrated();
@@ -17,6 +20,23 @@ export function App() {
     }, 1800);
     return () => window.clearTimeout(t);
   }, [setHydrated]);
+
+  useEffect(() => {
+    setAndroidGate(!unlocked);
+  }, [unlocked]);
+
+  useEffect(() => {
+    setAndroidDeviceLock(deviceLock);
+  }, [deviceLock]);
+
+  useEffect(() => {
+    const onGate = (e: Event) => {
+      const d = String((e as CustomEvent).detail ?? "");
+      if (d === "lock") lock();
+    };
+    window.addEventListener("kys-gate", onGate);
+    return () => window.removeEventListener("kys-gate", onGate);
+  }, [lock]);
 
   if (!hydrated) {
     return (
