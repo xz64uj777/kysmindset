@@ -15,11 +15,21 @@ export type TabId =
   | "alerts"
   | "network"
   | "system"
+  | "intel"
+  | "config"
   | "honeypot"
   | "timeline"
   | "posture"
-  | "history"
-  | "config";
+  | "history";
+
+export const LEGACY_TABS: Record<string, TabId> = {
+  honeypot: "intel",
+  timeline: "intel",
+  posture: "intel",
+  history: "intel",
+};
+
+export type IntelSection = "timeline" | "posture" | "history" | "honeypot";
 
 export interface SecurityActivity {
   id: string;
