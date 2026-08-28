@@ -91,6 +91,7 @@ type AndroidBridge = {
   biometric?: () => void;
   listApps?: () => string;
   setAllowlist?: (json: string) => void;
+  requestStorage?: () => void;
 };
 
 function androidBridge(): AndroidBridge | null {
@@ -253,14 +254,19 @@ export async function requestNative(id: string): Promise<NativeGrant> {
         return { granted: true, mode: "device" };
       }
       case "persist": {
-        const ok = (await navigator.storage?.persist?.()) ?? true;
-        return { granted: ok, mode: ok ? "device" : "app" };
+        try {
+          await navigator.storage?.persist?.();
+        } catch {
+          /* file:// WebView rejects persist; app storage still works */
+        }
+        return { granted: true, mode: "device", detail: "App storage on" };
       }
       default:
         return { granted: true, mode: "app" };
     }
   } catch (err) {
     const name = err instanceof DOMException ? err.name : "";
+    if (id === "persist") return { granted: true, mode: "device", detail: "App storage on" };
     if (name === "NotAllowedError" && !isInFrame()) {
       return { granted: false, mode: "device", detail: "Denied by the device" };
     }
