@@ -115,13 +115,9 @@ export function LockScreen() {
   const onBio = async () => {
     const r = await verifyBiometric();
     if (r === "ok") return true;
-    if (r === "unavailable") {
-      await new Promise((res) => window.setTimeout(res, 700));
-      return true;
-    }
     vibrate([40, 50, 40]);
-    setError("Biometric failed");
-    window.setTimeout(() => setError(""), 1000);
+    setError(r === "unavailable" ? "Set up fingerprint or face unlock first" : "Biometric failed");
+    window.setTimeout(() => setError(""), 1400);
     return false;
   };
 
@@ -286,20 +282,17 @@ export function LockScreen() {
           <span className="text-xs">Enter PIN or use biometrics</span>
         </div>
         <PinPad onSubmit={onSubmit} onBio={onBio} error={error} shake={shake} compact />
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => {
-              vibrate(20);
-              setSos(true);
-            }}
-            className="flex items-center gap-1.5 text-xs font-medium text-red/80 hover:text-red"
-          >
-            <Siren className="size-3.5" />
-            Emergency
-          </button>
-          <span className="text-2xs text-subtle">Hint {settings.pin}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            vibrate(20);
+            setSos(true);
+          }}
+          className="flex items-center gap-1.5 text-xs font-medium text-red/80 hover:text-red"
+        >
+          <Siren className="size-3.5" />
+          Emergency
+        </button>
       </div>
       <SosDialog open={sos} onOpenChange={setSos} />
     </div>

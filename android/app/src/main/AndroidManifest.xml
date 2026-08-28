@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:icon="@android:drawable/ic_lock_lock"
         android:label="Kysmindset"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

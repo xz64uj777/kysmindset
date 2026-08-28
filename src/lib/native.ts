@@ -230,6 +230,33 @@ function bytes(n: number) {
 }
 
 export async function verifyBiometric(): Promise<"ok" | "fail" | "unavailable"> {
+  const android = (window as unknown as { KysAndroid?: { biometric: () => void } }).KysAndroid;
+  if (android && typeof android.biometric === "function") {
+    const result = new Promise<"ok" | "fail" | "unavailable">((resolve) => {
+      let done = false;
+      const finish = (v: "ok" | "fail" | "unavailable") => {
+        if (done) return;
+        done = true;
+        resolve(v);
+      };
+      const on = (e: Event) => {
+        const d = String((e as CustomEvent).detail ?? "");
+        finish(d === "ok" || d === "unavailable" ? d : "fail");
+      };
+      window.addEventListener("kys-bio", on, { once: true });
+      window.setTimeout(() => {
+        window.removeEventListener("kys-bio", on);
+        finish("fail");
+      }, 90_000);
+    });
+    try {
+      android.biometric();
+    } catch {
+      return "unavailable";
+    }
+    return result;
+  }
+
   if (!(await hasPlatformAuth())) return "unavailable";
   const rpId = window.location.hostname;
   let credId: ArrayBuffer | null = null;
