@@ -29,12 +29,12 @@ import {
   HistoryPanel,
   HoneypotPanel,
   NetworkPanel,
-  OverviewPanel,
   PosturePanel,
   SystemPanel,
   TimelinePanel,
 } from "./panels";
 import { ConfigScreen } from "./config-screen";
+import { OverviewPanel } from "./overview-panel";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid },
