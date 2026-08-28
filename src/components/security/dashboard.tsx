@@ -33,6 +33,7 @@ import {
   SystemPanel,
   TimelinePanel,
 } from "./panels";
+import { ActionLegend } from "./activity-row";
 import { ConfigScreen } from "./config-screen";
 import { OverviewPanel } from "./overview-panel";
 
@@ -120,7 +121,7 @@ export function Dashboard() {
       <DecisionDialog />
       <SosDialog open={sos} onOpenChange={setSos} />
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 pt-safe pb-safe">
-        <header className="mb-4 flex items-center justify-between gap-3">
+        <header className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-md border border-cyan/20 bg-cyan-dim">
               <ShieldCheck className="size-5 text-cyan" />
@@ -207,6 +208,37 @@ export function Dashboard() {
           </div>
         </header>
 
+        <nav className="sticky top-0 z-30 -mx-4 mb-4 border-b border-cyan/15 bg-bg/95 px-4 py-2 backdrop-blur-xl">
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = tab === t.id;
+              const badge = badges[t.id] ?? 0;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    active
+                      ? "bg-cyan-dim text-cyan ring-1 ring-cyan/40"
+                      : "text-muted hover:bg-white/5 hover:text-fg",
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {t.label}
+                  {badge > 0 ? (
+                    <span className="rounded-full bg-rose px-1.5 py-0.5 text-2xs font-bold text-bg">
+                      {badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
         <InstallBar />
 
         {killSwitch ? (
@@ -258,24 +290,27 @@ export function Dashboard() {
           </div>
         ) : null}
 
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <Legend tone="emerald" label="Allowed" />
-            <Legend tone="rose" label="Threats" />
-            <Legend tone="red" label="Blocked" />
-            <Legend tone="teal" label="Resolved" />
+        <div className="mb-2.5 space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Legend tone="emerald" label="Allowed" />
+              <Legend tone="rose" label="Threats" />
+              <Legend tone="red" label="Blocked" />
+              <Legend tone="teal" label="Resolved" />
+            </div>
+            {killSwitch ? (
+              <div className="flex items-center gap-1.5 text-2xs font-medium text-red">
+                <span className="live-dot size-1.5 rounded-full bg-red" />
+                Air gap · 0 KB/s
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-2xs font-medium text-emerald">
+                <span className="live-dot size-1.5 rounded-full bg-emerald" />
+                Live · {linkKbps} KB/s
+              </div>
+            )}
           </div>
-          {killSwitch ? (
-            <div className="flex items-center gap-1.5 text-2xs font-medium text-red">
-              <span className="live-dot size-1.5 rounded-full bg-red" />
-              Air gap · 0 KB/s
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-2xs font-medium text-emerald">
-              <span className="live-dot size-1.5 rounded-full bg-emerald" />
-              Live · {linkKbps} KB/s
-            </div>
-          )}
+          {tab === "alerts" || tab === "network" || tab === "system" ? <ActionLegend /> : null}
         </div>
 
         <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -283,37 +318,6 @@ export function Dashboard() {
           <StatCard icon={<Bell className="size-4" />} label="Threats" value={threats.length} tone="rose" />
           <StatCard icon={<WifiOff className="size-4" />} label="Blocked" value={blocked.length} tone="red" />
           <StatCard icon={<Radar className="size-4" />} label="Monitored" value={activities.length} tone="cyan" />
-        </div>
-
-        <div className="sticky top-0 z-30 -mx-4 mb-4 border-b border-line bg-bg/90 px-4 py-2.5 backdrop-blur-xl">
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
-              const badge = badges[t.id] ?? 0;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  className={cn(
-                    "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors",
-                    active
-                      ? "border border-line-strong bg-white/10 text-fg"
-                      : "border border-transparent text-muted hover:bg-white/5 hover:text-fg",
-                  )}
-                >
-                  <Icon className="size-3.5" />
-                  {t.label}
-                  {badge > 0 ? (
-                    <span className="rounded-full bg-rose-dim px-1.5 py-0.5 text-2xs font-bold text-rose">
-                      {badge}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {tab === "overview" && <OverviewPanel />}
