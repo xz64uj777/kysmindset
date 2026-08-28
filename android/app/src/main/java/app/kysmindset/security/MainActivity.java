@@ -2,12 +2,18 @@ package app.kysmindset.security;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.VpnService;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -85,7 +91,62 @@ public class MainActivity extends FragmentActivity {
         else sendKill("denied");
     }
 
+    private void saveAllowlist(String json) {
+        StringBuilder lines = new StringBuilder();
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                String pkg = arr.optString(i, "").trim();
+                if (pkg.isEmpty()) continue;
+                if (lines.length() > 0) lines.append('\n');
+                lines.append(pkg);
+            }
+        } catch (Exception ignored) {
+        }
+        SharedPreferences prefs = getSharedPreferences(KillVpnService.PREFS, MODE_PRIVATE);
+        prefs.edit().putString(KillVpnService.KEY_ALLOW, lines.toString()).apply();
+    }
+
+    private void restartVpnIfRunning() {
+        if (!KillVpnService.active) return;
+        Intent i = new Intent(this, KillVpnService.class);
+        i.setAction(KillVpnService.ACTION_RESTART);
+        startService(i);
+    }
+
     public class KysBridge {
+        @JavascriptInterface
+        public String listApps() {
+            JSONArray out = new JSONArray();
+            try {
+                PackageManager pm = getPackageManager();
+                Intent launch = new Intent(Intent.ACTION_MAIN);
+                launch.addCategory(Intent.CATEGORY_LAUNCHER);
+                java.util.List<ResolveInfo> infos =
+                    pm.queryIntentActivities(launch, PackageManager.MATCH_ALL);
+                java.util.HashSet<String> seen = new java.util.HashSet<>();
+                for (ResolveInfo info : infos) {
+                    if (info.activityInfo == null) continue;
+                    String pkg = info.activityInfo.packageName;
+                    if (pkg == null || !seen.add(pkg)) continue;
+                    if (pkg.equals(getPackageName())) continue;
+                    JSONObject row = new JSONObject();
+                    CharSequence label = info.loadLabel(pm);
+                    row.put("pkg", pkg);
+                    row.put("name", label != null ? label.toString() : pkg);
+                    out.put(row);
+                }
+            } catch (Exception ignored) {
+            }
+            return out.toString();
+        }
+
+        @JavascriptInterface
+        public void setAllowlist(String json) {
+            saveAllowlist(json == null ? "[]" : json);
+            runOnUiThread(MainActivity.this::restartVpnIfRunning);
+        }
+
         @JavascriptInterface
         public void setKill(boolean on) {
             runOnUiThread(
