@@ -44,6 +44,7 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        DeviceOwner.applyLockPolicies(this);
         applyLockWindow(true);
         web = new WebView(this);
         setContentView(web);
@@ -84,6 +85,17 @@ public class MainActivity extends FragmentActivity {
         } else {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             showSystemBars();
+        }
+        applyLockTask(on);
+    }
+
+    private void applyLockTask(boolean on) {
+        if (!DeviceOwner.isOwner(this)) return;
+        DeviceOwner.applyLockPolicies(this);
+        try {
+            if (on && DeviceOwner.lockTaskPermitted(this)) startLockTask();
+            else if (!on) stopLockTask();
+        } catch (Exception ignored) {
         }
     }
 
@@ -145,9 +157,11 @@ public class MainActivity extends FragmentActivity {
     protected void onResume() {
         super.onResume();
         if (gated) hideSystemBars();
+        if (DeviceOwner.isOwner(this)) DeviceOwner.applyLockPolicies(this);
     }
 
     private void sendEvent(String name, String result) {
+        if (web == null) return;
         String js =
             "window.dispatchEvent(new CustomEvent('"
                 + name
@@ -273,6 +287,32 @@ public class MainActivity extends FragmentActivity {
                     if (on) startLockGate();
                     else stopLockGate();
                 });
+        }
+
+        @JavascriptInterface
+        public String ownerStatus() {
+            return DeviceOwner.statusJson(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void requestAdmin() {
+            runOnUiThread(
+                () -> startActivity(DeviceOwner.adminAddIntent(MainActivity.this)));
+        }
+
+        @JavascriptInterface
+        public String applyOwner(boolean replaceKeyguard) {
+            return DeviceOwner.apply(MainActivity.this, replaceKeyguard);
+        }
+
+        @JavascriptInterface
+        public void lockNow() {
+            runOnUiThread(() -> DeviceOwner.lockNow(MainActivity.this));
+        }
+
+        @JavascriptInterface
+        public String removeAdmin() {
+            return DeviceOwner.remove(MainActivity.this);
         }
 
         @JavascriptInterface
