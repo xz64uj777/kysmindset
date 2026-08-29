@@ -9,6 +9,24 @@ export type OwnerStatus = {
   component: string;
 };
 
+export type AppVersion = {
+  android: boolean;
+  code: number;
+  name: string;
+};
+
+export type UpdateEvent = {
+  state: string;
+  local?: number;
+  remote?: number;
+  name?: string;
+  published?: string;
+  updated?: string;
+  url?: string;
+  pct?: number;
+  error?: string;
+};
+
 type LockBridge = {
   setGate?: (locked: boolean) => void;
   setDeviceLock?: (on: boolean) => void;
@@ -17,6 +35,9 @@ type LockBridge = {
   applyOwner?: (replaceKeyguard: boolean) => string;
   lockNow?: () => void;
   removeAdmin?: () => string;
+  appVersion?: () => string;
+  checkUpdate?: () => void;
+  startUpdate?: () => void;
 };
 
 function bridge(): LockBridge | null {
@@ -90,4 +111,45 @@ export function removeAndroidAdmin(): OwnerStatus | null {
   } catch {
     return readOwnerStatus();
   }
+}
+
+export function readAppVersion(): AppVersion | null {
+  const b = bridge();
+  if (!b?.appVersion) return null;
+  try {
+    const parsed = JSON.parse(b.appVersion()) as AppVersion;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function checkAndroidUpdate() {
+  try {
+    bridge()?.checkUpdate?.();
+  } catch {
+    /* ignore */
+  }
+}
+
+export function startAndroidUpdate() {
+  try {
+    bridge()?.startUpdate?.();
+  } catch {
+    /* ignore */
+  }
+}
+
+export function subscribeAndroidUpdate(fn: (e: UpdateEvent) => void) {
+  const on = (ev: Event) => {
+    const raw = String((ev as CustomEvent).detail ?? "");
+    try {
+      const parsed = JSON.parse(raw) as UpdateEvent;
+      if (parsed && typeof parsed === "object") fn(parsed);
+    } catch {
+      /* ignore */
+    }
+  };
+  window.addEventListener("kys-update", on);
+  return () => window.removeEventListener("kys-update", on);
 }
