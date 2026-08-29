@@ -149,7 +149,7 @@ function ScanFeed({
   scanning: boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const lines = [...log].reverse();
+  const lines = Array.isArray(log) ? [...log].reverse() : [];
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -189,12 +189,11 @@ function QuickActions() {
   const killSwitch = useSecurity((s) => s.killSwitch);
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
   const setTab = useSecurity((s) => s.setTab);
-  const pending = useSecurity(
-    (s) => s.activities.filter((a) => a.status === "suspicious" || a.status === "unknown"),
-  );
-  const resolved = useSecurity(
-    (s) => s.activities.filter((a) => a.status === "blocked" || a.status === "killed" || a.status === "resolved").length,
-  );
+  const activities = useSecurity((s) => s.activities);
+  const pending = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
+  const resolved = activities.filter(
+    (a) => a.status === "blocked" || a.status === "killed" || a.status === "resolved",
+  ).length;
   const actions = [
     {
       key: "kill",
