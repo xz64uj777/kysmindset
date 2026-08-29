@@ -131,7 +131,8 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void handleLockIntent(Intent intent) {
-        if (intent != null && "app.kysmindset.security.LOCK".equals(intent.getAction())) {
+        if (intent == null) return;
+        if ("app.kysmindset.security.LOCK".equals(intent.getAction())) {
             applyLockWindow(true);
             sendEvent("kys-gate", "lock");
         }
@@ -162,11 +163,12 @@ public class MainActivity extends FragmentActivity {
 
     private void sendEvent(String name, String result) {
         if (web == null) return;
+        String safe = result == null ? "" : result.replace("\\", "\\\\").replace("'", "\\'");
         String js =
             "window.dispatchEvent(new CustomEvent('"
                 + name
                 + "',{detail:'"
-                + result
+                + safe
                 + "'}))";
         web.post(() -> web.evaluateJavascript(js, null));
     }
@@ -177,6 +179,10 @@ public class MainActivity extends FragmentActivity {
 
     private void sendKill(String result) {
         sendEvent("kys-kill", result);
+    }
+
+    private void sendUpdate(String json) {
+        sendEvent("kys-update", json);
     }
 
     private void startVpn() {
@@ -313,6 +319,21 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public String removeAdmin() {
             return DeviceOwner.remove(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public String appVersion() {
+            return AppUpdate.versionJson(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public void checkUpdate() {
+            AppUpdate.check(MainActivity.this, MainActivity.this::sendUpdate);
+        }
+
+        @JavascriptInterface
+        public void startUpdate() {
+            AppUpdate.install(MainActivity.this, MainActivity.this::sendUpdate);
         }
 
         @JavascriptInterface
