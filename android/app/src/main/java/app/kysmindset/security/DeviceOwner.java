@@ -11,6 +11,7 @@ import org.json.JSONObject;
 
 public final class DeviceOwner {
     public static final String KEY_REPLACE_KEYGUARD = "replaceKeyguard";
+    public static final String KEY_PIN_ON_LOCK = "pinOnLock";
     public static final String ADB =
         "adb shell dpm set-device-owner app.kysmindset.security/.KysDeviceAdminReceiver";
 
@@ -22,6 +23,10 @@ public final class DeviceOwner {
 
     public static DevicePolicyManager dpm(Context ctx) {
         return (DevicePolicyManager) ctx.getSystemService(Context.DEVICE_POLICY_SERVICE);
+    }
+
+    public static SharedPreferences prefs(Context ctx) {
+        return ctx.getSharedPreferences(LockGateService.PREFS, Context.MODE_PRIVATE);
     }
 
     public static boolean isOwner(Context ctx) {
@@ -39,20 +44,29 @@ public final class DeviceOwner {
         return m != null && m.isLockTaskPermitted(ctx.getPackageName());
     }
 
+    public static boolean pinOnLock(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_PIN_ON_LOCK, false);
+    }
+
+    public static void setPinOnLock(Context ctx, boolean on) {
+        prefs(ctx).edit().putBoolean(KEY_PIN_ON_LOCK, on).apply();
+    }
+
     public static Intent adminAddIntent(Context ctx) {
         Intent i = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
         i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx));
         i.putExtra(
             DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-            "Kysmindset uses device admin to lock the phone and, once it is Device Owner, to replace the system lock screen."
+            "Allows Kysmindset to lock the phone when the screen turns off and to show its own lock screen when it turns on. No computer or factory reset."
         );
         return i;
     }
 
     public static void applyLockPolicies(Context ctx) {
         DevicePolicyManager m = dpm(ctx);
-        if (m == null || !isOwner(ctx)) return;
+        if (m == null) return;
         ComponentName a = admin(ctx);
+        if (!isOwner(ctx)) return;
         try {
             m.setLockTaskPackages(a, new String[] {ctx.getPackageName()});
         } catch (Exception ignored) {
@@ -78,8 +92,7 @@ public final class DeviceOwner {
             m.setDeviceOwnerLockScreenInfo(a, "Kysmindset");
         } catch (Exception ignored) {
         }
-        SharedPreferences p = ctx.getSharedPreferences(LockGateService.PREFS, Context.MODE_PRIVATE);
-        if (p.getBoolean(KEY_REPLACE_KEYGUARD, false)) {
+        if (prefs(ctx).getBoolean(KEY_REPLACE_KEYGUARD, false)) {
             tryDisableKeyguard(ctx, true);
         }
     }
@@ -104,14 +117,18 @@ public final class DeviceOwner {
     }
 
     public static String apply(Context ctx, boolean replaceKeyguard) {
-        SharedPreferences p = ctx.getSharedPreferences(LockGateService.PREFS, Context.MODE_PRIVATE);
-        p.edit().putBoolean(KEY_REPLACE_KEYGUARD, replaceKeyguard).apply();
+        prefs(ctx).edit().putBoolean(KEY_REPLACE_KEYGUARD, replaceKeyguard).apply();
         applyLockPolicies(ctx);
         boolean kg = false;
         if (isOwner(ctx)) {
             kg = tryDisableKeyguard(ctx, replaceKeyguard);
         }
         return statusJson(ctx, kg, replaceKeyguard);
+    }
+
+    public static String applyPin(Context ctx, boolean on) {
+        setPinOnLock(ctx, on);
+        return statusJson(ctx);
     }
 
     @SuppressWarnings("deprecation")
@@ -127,12 +144,12 @@ public final class DeviceOwner {
             } catch (Exception ignored) {
             }
         }
+        setPinOnLock(ctx, false);
         return statusJson(ctx);
     }
 
     public static String statusJson(Context ctx) {
-        SharedPreferences p = ctx.getSharedPreferences(LockGateService.PREFS, Context.MODE_PRIVATE);
-        boolean want = p.getBoolean(KEY_REPLACE_KEYGUARD, false);
+        boolean want = prefs(ctx).getBoolean(KEY_REPLACE_KEYGUARD, false);
         return statusJson(ctx, false, want);
     }
 
@@ -143,6 +160,7 @@ public final class DeviceOwner {
             o.put("owner", isOwner(ctx));
             o.put("admin", isAdmin(ctx));
             o.put("lockTask", lockTaskPermitted(ctx));
+            o.put("pinOnLock", pinOnLock(ctx));
             o.put("keyguardOff", keyguardOff);
             o.put("replaceKeyguard", wantReplace);
             o.put("adb", ADB);

@@ -3,6 +3,7 @@ export type OwnerStatus = {
   owner: boolean;
   admin: boolean;
   lockTask: boolean;
+  pinOnLock: boolean;
   keyguardOff: boolean;
   replaceKeyguard: boolean;
   adb: string;
@@ -33,6 +34,8 @@ type LockBridge = {
   ownerStatus?: () => string;
   requestAdmin?: () => void;
   applyOwner?: (replaceKeyguard: boolean) => string;
+  applyPin?: (on: boolean) => string;
+  pinNow?: () => void;
   lockNow?: () => void;
   removeAdmin?: () => string;
   appVersion?: () => string;
@@ -91,6 +94,25 @@ export function applyAndroidOwner(replaceKeyguard: boolean): OwnerStatus | null 
     return parsed && typeof parsed === "object" ? parsed : readOwnerStatus();
   } catch {
     return readOwnerStatus();
+  }
+}
+
+export function applyAndroidPin(on: boolean): OwnerStatus | null {
+  const b = bridge();
+  if (!b?.applyPin) return readOwnerStatus();
+  try {
+    const parsed = JSON.parse(b.applyPin(on)) as OwnerStatus;
+    return parsed && typeof parsed === "object" ? parsed : readOwnerStatus();
+  } catch {
+    return readOwnerStatus();
+  }
+}
+
+export function androidPinNow() {
+  try {
+    bridge()?.pinNow?.();
+  } catch {
+    /* ignore */
   }
 }
 
