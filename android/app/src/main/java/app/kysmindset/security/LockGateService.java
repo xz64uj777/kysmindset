@@ -1,5 +1,6 @@
 package app.kysmindset.security;
 
+import android.app.ActivityOptions;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -12,6 +13,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
@@ -35,15 +37,26 @@ public class LockGateService extends Service {
             } else if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
                 if (!deviceLockOn(context)) return;
                 Intent launch = new Intent(context, MainActivity.class);
+                launch.setAction("app.kysmindset.security.LOCK");
                 launch.addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK
                         | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP
                 );
+                Bundle opts = null;
                 if (Build.VERSION.SDK_INT >= 27) {
-                    launch.addFlags(Intent.FLAG_ACTIVITY_SHOW_WHEN_LOCKED);
+                    ActivityOptions options = ActivityOptions.makeBasic();
+                    options.setLockTaskEnabled(false);
+                    try {
+                        ActivityOptions.class
+                            .getMethod("setShowWhenLocked", boolean.class)
+                            .invoke(options, true);
+                    } catch (Exception ignored) {
+                    }
+                    opts = options.toBundle();
                 }
-                context.startActivity(launch);
+                if (opts != null) context.startActivity(launch, opts);
+                else context.startActivity(launch);
             }
         }
     };
@@ -68,7 +81,7 @@ public class LockGateService extends Service {
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_USER_PRESENT);
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(screen, f, Context.RECEIVER_EXPORTED);
+            registerReceiver(screen, f, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(screen, f);
         }
