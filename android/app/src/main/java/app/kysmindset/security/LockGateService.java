@@ -34,6 +34,7 @@ public class LockGateService extends Service {
             String a = intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
                 MainActivity.requestLock(context);
+                DeviceOwner.lockNow(context);
             } else if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
                 if (!deviceLockOn(context)) return;
                 Intent launch = new Intent(context, MainActivity.class);
@@ -46,12 +47,17 @@ public class LockGateService extends Service {
                 Bundle opts = null;
                 if (Build.VERSION.SDK_INT >= 27) {
                     ActivityOptions options = ActivityOptions.makeBasic();
-                    options.setLockTaskEnabled(false);
                     try {
                         ActivityOptions.class
                             .getMethod("setShowWhenLocked", boolean.class)
                             .invoke(options, true);
                     } catch (Exception ignored) {
+                    }
+                    if (Build.VERSION.SDK_INT >= 28 && DeviceOwner.isOwner(context)) {
+                        try {
+                            options.setLockTaskEnabled(true);
+                        } catch (Exception ignored) {
+                        }
                     }
                     opts = options.toBundle();
                 }
@@ -97,6 +103,7 @@ public class LockGateService extends Service {
             return START_NOT_STICKY;
         }
         active = true;
+        DeviceOwner.applyLockPolicies(this);
         Intent open = new Intent(this, MainActivity.class);
         open.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi =
