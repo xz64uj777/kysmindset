@@ -32,7 +32,7 @@ export function App() {
   useEffect(() => {
     const onGate = (e: Event) => {
       const d = String((e as CustomEvent).detail ?? "");
-      if (d === "lock") lock();
+      if (d === "lock" && useSecurity.getState().unlocked) lock();
     };
     window.addEventListener("kys-gate", onGate);
     return () => window.removeEventListener("kys-gate", onGate);
@@ -70,7 +70,12 @@ class BootError extends Component<{ children: ReactNode }, { err: string | null 
           className="rounded-md border border-line bg-elevated px-3 py-2 text-sm text-fg"
           onClick={() => {
             try {
-              localStorage.removeItem("kysmindset-v1");
+              const keys: string[] = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && k.startsWith("kysmindset")) keys.push(k);
+              }
+              keys.forEach((k) => localStorage.removeItem(k));
               sessionStorage.removeItem("kysmindset_unlocked");
             } catch {
               /* ignore */
