@@ -92,6 +92,12 @@ export function ConfigPanel() {
             onChange={(v) => patch({ autoLock: v })}
           />
           <ToggleRow
+            title="Device lock screen"
+            desc="On the APK, wake Kysmindset over the keyguard when the screen turns on. Needs Device Owner for a real replacement of the system lock."
+            checked={settings.deviceLock !== false}
+            onChange={(v) => patch({ deviceLock: v })}
+          />
+          <ToggleRow
             title="Slack Alerts"
             desc="Send threat alerts to Slack"
             checked={settings.slackAlerts}
