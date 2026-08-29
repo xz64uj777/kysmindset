@@ -47,7 +47,7 @@ export function DeviceOwnerPanel() {
         subtitle="Make Kysmindset the device lock, not just an app overlay"
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge tone={st?.owner ? "emerald" : st?.admin ? "amber" : "default"}>{role}</Badge>
+        <Badge tone={st?.owner ? "emerald" : st?.admin ? "amber" : "muted"}>{role}</Badge>
         {st?.lockTask ? <Badge tone="cyan">Lock-task ready</Badge> : null}
         {st?.keyguardOff ? <Badge tone="emerald">System keyguard off</Badge> : null}
       </div>
@@ -85,7 +85,9 @@ export function DeviceOwnerPanel() {
             onClick={() => {
               const next = removeAndroidAdmin();
               setSt(next);
-              toast.message("Asked Android to drop admin. Device Owner may need a factory reset to fully clear.");
+              toast.message(
+                "Asked Android to drop admin. Device Owner may need a factory reset to fully clear.",
+              );
             }}
           >
             Remove admin

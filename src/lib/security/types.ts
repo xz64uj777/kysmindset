@@ -112,6 +112,7 @@ export interface Settings {
   autoScanMin: number;
   pin: string;
   autoLock: boolean;
+  deviceLock?: boolean;
 }
 
 export interface Attempt {
