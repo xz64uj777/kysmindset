@@ -28,6 +28,13 @@ jobs:
           mkdir -p android/app/src/main/assets/www
           cp -a dist/. android/app/src/main/assets/www/
 
+      - name: Stamp rising versionCode
+        run: |
+          VC=${{ github.run_number }}
+          sed -i "s/versionCode [0-9]*/versionCode ${VC}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${VC}.0\"/" android/app/build.gradle
+          grep version android/app/build.gradle
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -51,8 +58,10 @@ jobs:
           tag_name: apk-latest
           name: Kysmindset APK
           body: |
+            versionCode: ${{ github.run_number }}
             Real Kysmindset app (Vite build inside Android WebView).
             PIN 1234.
             Debug APK — Play Protect may warn.
+            In-app update: Config → App update.
           files: android/app/build/outputs/apk/debug/app-debug.apk
           make_latest: true
