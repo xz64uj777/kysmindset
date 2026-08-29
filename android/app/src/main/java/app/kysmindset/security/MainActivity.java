@@ -30,6 +30,7 @@ import java.util.concurrent.Executor;
 
 public class MainActivity extends FragmentActivity {
     private static final int VPN_REQ = 91;
+    private static final int ADMIN_REQ = 92;
     private WebView web;
     private boolean gated = true;
 
@@ -90,13 +91,17 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void applyLockTask(boolean on) {
-        if (!DeviceOwner.isOwner(this)) return;
         DeviceOwner.applyLockPolicies(this);
         try {
-            if (on && DeviceOwner.lockTaskPermitted(this)) startLockTask();
+            if (on && canPin()) startLockTask();
             else if (!on) stopLockTask();
         } catch (Exception ignored) {
         }
+    }
+
+    private boolean canPin() {
+        if (DeviceOwner.isOwner(this) && DeviceOwner.lockTaskPermitted(this)) return true;
+        return DeviceOwner.pinOnLock(this);
     }
 
     private void hideSystemBars() {
@@ -148,7 +153,7 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        if (LockGateService.deviceLockOn(this)) {
+        if (LockGateService.deviceLockOn(this) && !gated) {
             gated = true;
             sendEvent("kys-gate", "lock");
         }
@@ -158,7 +163,7 @@ public class MainActivity extends FragmentActivity {
     protected void onResume() {
         super.onResume();
         if (gated) hideSystemBars();
-        if (DeviceOwner.isOwner(this)) DeviceOwner.applyLockPolicies(this);
+        DeviceOwner.applyLockPolicies(this);
     }
 
     private void sendEvent(String name, String result) {
@@ -201,6 +206,13 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == ADMIN_REQ) {
+            if (DeviceOwner.isAdmin(this)) {
+                DeviceOwner.applyLockPolicies(this);
+                startLockGate();
+            }
+            return;
+        }
         if (requestCode != VPN_REQ) return;
         if (resultCode == RESULT_OK) startVpn();
         else sendKill("denied");
@@ -303,12 +315,29 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public void requestAdmin() {
             runOnUiThread(
-                () -> startActivity(DeviceOwner.adminAddIntent(MainActivity.this)));
+                () -> startActivityForResult(DeviceOwner.adminAddIntent(MainActivity.this), ADMIN_REQ));
         }
 
         @JavascriptInterface
         public String applyOwner(boolean replaceKeyguard) {
             return DeviceOwner.apply(MainActivity.this, replaceKeyguard);
+        }
+
+        @JavascriptInterface
+        public String applyPin(boolean on) {
+            return DeviceOwner.applyPin(MainActivity.this, on);
+        }
+
+        @JavascriptInterface
+        public void pinNow() {
+            runOnUiThread(
+                () -> {
+                    DeviceOwner.setPinOnLock(MainActivity.this, true);
+                    try {
+                        startLockTask();
+                    } catch (Exception ignored) {
+                    }
+                });
         }
 
         @JavascriptInterface

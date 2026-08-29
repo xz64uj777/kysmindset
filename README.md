@@ -12,27 +12,31 @@ https://github.com/xz64uj777/kysmindset/releases/tag/apk-latest
 
 Download `app-debug.apk`. Play Protect may warn on a debug build.
 
-## Device Owner (real device lock)
+## Device lock (what most people should use)
 
-Android will not let an app become Device Owner after you have signed into accounts. Enroll from a computer:
+You do **not** need Device Owner, ADB, or a factory reset.
 
-1. Install the APK and open Kysmindset once.
-2. Turn on USB debugging.
-3. Remove Google / Samsung accounts, or factory-reset the phone first. `dpm` refuses otherwise.
-4. Run:
+1. Install the APK and open **Config → Device lock**.
+2. Tap **Enable device admin** and allow it on the Android screen.
+3. Leave **Device lock screen** on in Config.
+
+What that does:
+
+- Screen off → the phone locks (`lockNow`).
+- Screen on → Kysmindset comes up over the keyguard.
+- Optional **Pin app while locked** uses Android screen pinning so Home is blocked until you unpin.
+
+This is close to a device lock. It is not the same as Device Owner: Android will not let a normal app hide Home permanently or delete the system PIN.
+
+## Device Owner (optional / advanced)
+
+Only if you can factory-reset or you have a phone with no accounts:
 
 ```bash
 adb shell dpm set-device-owner app.kysmindset.security/.KysDeviceAdminReceiver
 ```
 
-Success looks like: `Device owner set to package app.kysmindset.security`
-
-5. Open **Config → Device Owner**. Role should read **Device owner**.
-6. Optional: turn on **Replace system keyguard**. That only works if the phone has no PIN/pattern of its own.
-
-While the Kysmindset lock is up, lock-task mode hides Home and Recents. Unlocking with the app PIN returns the phone to normal use.
-
-Device admin (the in-app Enable button) is weaker: it can `lockNow` but cannot replace the system keyguard.
+That can hide Home/Recents and, if the phone has no PIN of its own, replace the system keyguard.
 
 ## Run on a computer
 
