@@ -13,8 +13,8 @@ public class BootReceiver extends BroadcastReceiver {
         if (!Intent.ACTION_BOOT_COMPLETED.equals(a) && !Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(a)) {
             return;
         }
-        DeviceOwner.applyLockPolicies(context);
         if (!LockGateService.deviceLockOn(context)) return;
+        if (!DeviceOwner.isAdmin(context)) return;
         Intent svc = new Intent(context, LockGateService.class);
         svc.setAction(LockGateService.ACTION_START);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(svc);
