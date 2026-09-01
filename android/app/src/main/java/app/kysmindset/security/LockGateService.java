@@ -18,12 +18,13 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 /**
- * Optional Device Admin helper: on screen-off, lock the phone with the
- * <b>system</b> keyguard ({@code lockNow}).
+ * Optional Device Admin helper.
  *
- * <p>This service must never start an activity over the lock screen, never
- * turn the screen back on, and never pin the app. Doing those things trapped
- * phones so Home and the app PIN were both unreachable.
+ * <p>Screen-off: {@code lockNow} — the <b>system</b> keyguard. Never start an
+ * activity over that lock screen (that trapped phones).
+ *
+ * <p>After the user unlocks Android ({@code USER_PRESENT}): bring Kysmindset
+ * to the front for the in-app PIN. Home and Back still leave unless they pinned.
  */
 public class LockGateService extends Service {
     public static final String PREFS = "kysmindset-lock";
@@ -31,23 +32,32 @@ public class LockGateService extends Service {
     public static final String ACTION_START = "app.kysmindset.security.LOCK_GATE_START";
     public static final String ACTION_STOP = "app.kysmindset.security.LOCK_GATE_STOP";
     public static final String ACTION_DISABLE = "app.kysmindset.security.LOCK_GATE_DISABLE";
+    public static final String ACTION_LOCK = "app.kysmindset.security.LOCK";
     private static final String CHANNEL = "kys-lock";
     private static final int NOTIF = 42;
+    private static final int NOTIF_UNLOCK = 43;
     private static final long LOCK_DEBOUNCE_MS = 2000;
 
     public static volatile boolean active = false;
     private long lastLockAt = 0;
+    private long lastOpenAt = 0;
 
     private final BroadcastReceiver screen = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent == null || !Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
-            if (!deviceLockOn(context)) return;
-            if (!DeviceOwner.isAdmin(context)) return;
-            long now = System.currentTimeMillis();
-            if (now - lastLockAt < LOCK_DEBOUNCE_MS) return;
-            lastLockAt = now;
-            DeviceOwner.lockNow(context);
+            if (intent == null) return;
+            if (!deviceLockOn(context) || !DeviceOwner.isAdmin(context)) return;
+            String a = intent.getAction();
+            if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                long now = System.currentTimeMillis();
+                if (now - lastLockAt < LOCK_DEBOUNCE_MS) return;
+                lastLockAt = now;
+                DeviceOwner.lockNow(context);
+                return;
+            }
+            if (Intent.ACTION_USER_PRESENT.equals(a)) {
+                openAfterUnlock(context);
+            }
         }
     };
 
@@ -63,17 +73,63 @@ public class LockGateService extends Service {
             .apply();
     }
 
+    static Intent lockIntent(Context ctx) {
+        Intent launch = new Intent(ctx, MainActivity.class);
+        launch.setAction(ACTION_LOCK);
+        launch.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        return launch;
+    }
+
+    private void openAfterUnlock(Context context) {
+        long now = System.currentTimeMillis();
+        if (now - lastOpenAt < LOCK_DEBOUNCE_MS) return;
+        lastOpenAt = now;
+        Intent launch = lockIntent(context);
+        try {
+            context.startActivity(launch);
+        } catch (Exception ignored) {
+        }
+        // Android 10+ often blocks background activity starts. Full-screen
+        // intent after USER_PRESENT (keyguard already gone) is the backup.
+        PendingIntent pi =
+            PendingIntent.getActivity(
+                context,
+                2,
+                launch,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification n =
+            new NotificationCompat.Builder(context, CHANNEL)
+                .setContentTitle("Kysmindset")
+                .setContentText("Unlock this app")
+                .setSmallIcon(android.R.drawable.ic_lock_lock)
+                .setContentIntent(pi)
+                .setFullScreenIntent(pi, true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+                .setAutoCancel(true)
+                .setSilent(false)
+                .build();
+        NotificationManager nm = context.getSystemService(NotificationManager.class);
+        if (nm != null) nm.notify(NOTIF_UNLOCK, n);
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch =
-                new NotificationChannel(CHANNEL, "Phone lock", NotificationManager.IMPORTANCE_LOW);
+                new NotificationChannel(CHANNEL, "Phone lock", NotificationManager.IMPORTANCE_HIGH);
             ch.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
         }
-        IntentFilter f = new IntentFilter(Intent.ACTION_SCREEN_OFF);
+        IntentFilter f = new IntentFilter();
+        f.addAction(Intent.ACTION_SCREEN_OFF);
+        f.addAction(Intent.ACTION_USER_PRESENT);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(screen, f, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -87,6 +143,8 @@ public class LockGateService extends Service {
         if (ACTION_STOP.equals(action) || ACTION_DISABLE.equals(action)) {
             if (ACTION_DISABLE.equals(action)) setDeviceLockOn(this, false);
             active = false;
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) nm.cancel(NOTIF_UNLOCK);
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
@@ -121,12 +179,13 @@ public class LockGateService extends Service {
         Notification n =
             new NotificationCompat.Builder(this, CHANNEL)
                 .setContentTitle("Kysmindset phone lock")
-                .setContentText("Screen off uses your system PIN. Home still works.")
+                .setContentText("System PIN first, then this app. Home still leaves.")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
                 .addAction(0, "Turn off", pOff)
                 .setOngoing(true)
                 .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(NOTIF, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);

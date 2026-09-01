@@ -2,6 +2,7 @@ package app.kysmindset.security;
 
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
+import android.app.KeyguardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -34,6 +35,9 @@ public class MainActivity extends FragmentActivity {
     private static final int VPN_REQ = 91;
     private static final int ADMIN_REQ = 92;
     private WebView web;
+    private boolean pageReady = false;
+    private boolean lockAfterUnlock = false;
+    private String pendingGate = null;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -55,9 +59,17 @@ public class MainActivity extends FragmentActivity {
         } catch (Exception ignored) {
         }
         s.setMediaPlaybackRequiresUserGesture(false);
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(
+            new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    pageReady = true;
+                    flushGate();
+                }
+            });
         web.addJavascriptInterface(new KysBridge(), "KysAndroid");
         web.loadUrl("file:///android_asset/www/index.html");
+        if (isLockIntent(getIntent())) requestAppLock();
         if (LockGateService.deviceLockOn(this) && DeviceOwner.isAdmin(this)) {
             startLockGate();
         }
@@ -149,9 +161,40 @@ public class MainActivity extends FragmentActivity {
         // While pinned, Back/Home must not dump you to the launcher.
         // Unpin is Recents + Back (system), or turn the pin toggle off.
         if (DeviceOwner.pinOnLock(this) && inLockTask()) return;
+        lockAfterUnlock = false;
         clearOverlayFlags();
         stopPin();
         moveTaskToBack(true);
+    }
+
+    private boolean isLockIntent(Intent intent) {
+        return intent != null && LockGateService.ACTION_LOCK.equals(intent.getAction());
+    }
+
+    private boolean keyguardLocked() {
+        KeyguardManager kg = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        return kg != null && kg.isKeyguardLocked();
+    }
+
+    private void requestAppLock() {
+        pendingGate = "lock";
+        flushGate();
+    }
+
+    private void flushGate() {
+        if (!pageReady || pendingGate == null || web == null) return;
+        final String g = pendingGate;
+        pendingGate = null;
+        web.postDelayed(
+            () -> {
+                String js =
+                    "(function(){try{sessionStorage.removeItem('kysmindset_unlocked')}catch(e){}"
+                        + "window.dispatchEvent(new CustomEvent('kys-gate',{detail:'"
+                        + g
+                        + "'}));})()";
+                web.evaluateJavascript(js, null);
+            },
+            400);
     }
 
     @Override
@@ -159,9 +202,7 @@ public class MainActivity extends FragmentActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         maintainPin();
-        if (intent != null && "app.kysmindset.security.LOCK".equals(intent.getAction())) {
-            sendEvent("kys-gate", "lock");
-        }
+        if (isLockIntent(intent)) requestAppLock();
     }
 
     @Override
@@ -174,6 +215,10 @@ public class MainActivity extends FragmentActivity {
     protected void onResume() {
         super.onResume();
         maintainPin();
+        if (lockAfterUnlock && !keyguardLocked()) {
+            lockAfterUnlock = false;
+            requestAppLock();
+        }
     }
 
     private void sendEvent(String name, String result) {
@@ -356,7 +401,15 @@ public class MainActivity extends FragmentActivity {
 
         @JavascriptInterface
         public void lockNow() {
-            runOnUiThread(() -> DeviceOwner.lockNow(MainActivity.this));
+            runOnUiThread(
+                () -> {
+                    lockAfterUnlock = true;
+                    if (LockGateService.deviceLockOn(MainActivity.this)
+                        && DeviceOwner.isAdmin(MainActivity.this)) {
+                        startLockGate();
+                    }
+                    DeviceOwner.lockNow(MainActivity.this);
+                });
         }
 
         @JavascriptInterface

@@ -66,8 +66,8 @@ export function DeviceOwnerPanel() {
         <div className="space-y-3">
           <p className="text-xs text-muted">
             Device Admin is the path almost everyone can use. Android shows one system screen.
-            After you allow it, Lock phone now uses your system PIN. This app will not sit on top
-            of the Android lock screen.
+            Lock phone now uses your system PIN first — this app cannot replace the Android lock
+            screen. After you unlock the phone, Kysmindset comes back to its own PIN.
           </p>
           <p className="text-xs text-muted">
             Home and Back always leave. Pinning is optional and uses Android’s own pin dialog.
@@ -101,9 +101,9 @@ function AdminControls({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">
-        Admin is on. Screen off can lock the phone with your system PIN if you enable that toggle.
-        Home and Back leave unless you pin. Pinning uses Android’s own screen pin — Recents + Back
-        unpins.
+        Admin is on. Lock phone now (and screen-off if that toggle is on) shows the Android lock
+        screen first. After your phone PIN or fingerprint, this app opens on its PIN. Home and
+        Back leave unless you pin.
       </p>
       <ToggleRow
         title="Pin app while locked"
