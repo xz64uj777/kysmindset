@@ -1,1 +1,58 @@
-<!doctype html><title>Building…</title>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Kysmindset</title>
+  <style>
+    :root { --bg:#06080F; --fg:#E8EEF7; --muted:#8B97AB; --line:rgba(255,255,255,.08); --elev:#121821; --cyan:#22d3ee; --red:#f87171; --em:#34d399; }
+    * { box-sizing: border-box; }
+    html, body { margin:0; min-height:100%; background:var(--bg); color:var(--fg); font-family: system-ui, sans-serif; }
+    button { font: inherit; color: inherit; cursor: pointer; }
+    .wrap { min-height: 100dvh; padding: 28px 20px calc(24px + env(safe-area-inset-bottom)); max-width: 420px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+    .btn { min-height:44px; border-radius:10px; border:1px solid var(--line); background:var(--elev); padding:10px 14px; font-size:13px; font-weight:600; }
+    .btn.primary { background: var(--cyan); color: var(--bg); border:0; }
+    .btn.home { background: var(--em); color: var(--bg); border:0; min-width: 140px; }
+    .note { margin-top:20px; font-size:12px; color:var(--muted); }
+    code { color: var(--fg); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kysmindset</h1>
+    <p>This APK is the Device Admin, VPN kill, and biometric bridge. It will not cover the Android lock screen. Back and Home always leave.</p>
+    <div class="row">
+      <button class="btn home" id="home" type="button">Home</button>
+      <button class="btn" id="off" type="button">Disable phone lock</button>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="admin" type="button">Enable Device Admin</button>
+      <button class="btn" id="lock" type="button">Lock phone now</button>
+      <button class="btn" id="kill" type="button">Arm VPN kill</button>
+    </div>
+    <p class="note" id="status">Waiting for native bridge…</p>
+  </div>
+  <script>
+    const a = window.KysAndroid;
+    const status = document.getElementById("status");
+    if (!a) {
+      status.textContent = "KysAndroid is missing. Rebuild the APK.";
+    } else {
+      status.textContent = a.ownerStatus ? a.ownerStatus() : "Bridge ready";
+      if (a.setGate) a.setGate(false);
+      document.getElementById("home").onclick = () => a.goHome && a.goHome();
+      document.getElementById("off").onclick = () => {
+        if (a.setDeviceLock) a.setDeviceLock(false);
+        if (a.setGate) a.setGate(false);
+        if (a.goHome) a.goHome();
+      };
+      document.getElementById("admin").onclick = () => a.requestAdmin && a.requestAdmin();
+      document.getElementById("lock").onclick = () => a.lockNow && a.lockNow();
+      document.getElementById("kill").onclick = () => a.setKill && a.setKill(true);
+    }
+  </script>
+</body>
+</html>

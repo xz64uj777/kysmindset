@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { BgField, ScoreTone, StatusDot } from "./chrome";
 import { SosDialog } from "./dialogs";
 import { PinPad } from "./pin-pad";
+import { goHome, isAndroidApp } from "@/lib/android-lock";
 import { lastGeoLabel, requestWakeLock, verifyBiometric, vibrate } from "@/lib/native";
 import { useScore, useSecurity } from "@/lib/security/store";
 import { cn, timeAgo } from "@/lib/utils";
@@ -282,6 +283,15 @@ export function LockScreen() {
           <span className="text-xs">Enter PIN or use biometrics</span>
         </div>
         <PinPad onSubmit={onSubmit} onBio={onBio} error={error} shake={shake} compact />
+        {isAndroidApp() ? (
+          <button
+            type="button"
+            onClick={() => goHome()}
+            className="min-h-11 w-full max-w-sm rounded-md border border-line bg-elevated px-4 py-2 text-sm text-fg"
+          >
+            Home
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => {

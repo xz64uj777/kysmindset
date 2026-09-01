@@ -92,9 +92,9 @@ export function ConfigPanel() {
             onChange={(v) => patch({ autoLock: v })}
           />
           <ToggleRow
-            title="Device lock screen"
-            desc="On the APK, wake Kysmindset over the keyguard when the screen turns on. Needs Device Owner for a real replacement of the system lock."
-            checked={settings.deviceLock !== false}
+            title="Lock phone on screen off"
+            desc="On the APK, Device Admin lockNow uses your system PIN. This app does not cover the Android lock screen. Home and Back always leave."
+            checked={settings.deviceLock === true}
             onChange={(v) => patch({ deviceLock: v })}
           />
           <ToggleRow

@@ -32,7 +32,7 @@ jobs:
         run: |
           VC=${{ github.run_number }}
           sed -i "s/versionCode [0-9]*/versionCode ${VC}/" android/app/build.gradle
-          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${VC}.0\"/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"2.1.${VC}\"/" android/app/build.gradle
           grep version android/app/build.gradle
 
       - uses: actions/setup-java@v4
@@ -56,12 +56,18 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: Kysmindset APK
+          name: Kysmindset APK 2.1
           body: |
-            versionCode: ${{ github.run_number }}
-            Real Kysmindset app (Vite build inside Android WebView).
-            PIN 1234.
+            **2.1 lock-escape build** (versionCode ${{ github.run_number }})
+
+            This build does **not** sit on top of the Android lock screen.
+            Home and Back always leave. Screen-off only uses your system PIN.
+
+            Before installing over a trapped 2.0.x APK:
+            1. Settings → Security → Device admin apps → Kysmindset → Deactivate
+            2. Or uninstall, then install this APK
+
+            PIN 1234 (app PIN, not phone PIN).
             Debug APK — Play Protect may warn.
-            In-app update: Config → App update.
           files: android/app/build/outputs/apk/debug/app-debug.apk
           make_latest: true

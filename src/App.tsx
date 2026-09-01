@@ -9,7 +9,7 @@ export function App() {
   const unlocked = useSecurity((s) => s.unlocked);
   const setHydrated = useSecurity((s) => s.setHydrated);
   const lock = useSecurity((s) => s.lock);
-  const deviceLock = useSecurity((s) => s.settings.deviceLock !== false);
+  const deviceLock = useSecurity((s) => s.settings.deviceLock === true);
 
   useEffect(() => {
     setHydrated();
@@ -22,8 +22,9 @@ export function App() {
   }, [setHydrated]);
 
   useEffect(() => {
-    setAndroidGate(!unlocked);
-  }, [unlocked]);
+    // Never overlay the system keyguard. Native recoverFromKiosk runs on setGate(false).
+    setAndroidGate(false);
+  }, []);
 
   useEffect(() => {
     setAndroidDeviceLock(deviceLock);

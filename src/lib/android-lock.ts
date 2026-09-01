@@ -30,6 +30,7 @@ export type UpdateEvent = {
 
 type LockBridge = {
   setGate?: (locked: boolean) => void;
+  goHome?: () => void;
   setDeviceLock?: (on: boolean) => void;
   ownerStatus?: () => string;
   requestAdmin?: () => void;
@@ -54,6 +55,16 @@ export function isAndroidApp() {
 export function setAndroidGate(locked: boolean) {
   try {
     bridge()?.setGate?.(locked);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function goHome() {
+  try {
+    const b = bridge();
+    if (typeof b?.goHome === "function") b.goHome();
+    else b?.setGate?.(false);
   } catch {
     /* ignore */
   }

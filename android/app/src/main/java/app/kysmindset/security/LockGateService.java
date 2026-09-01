@@ -1,6 +1,5 @@
 package app.kysmindset.security;
 
-import android.app.ActivityOptions;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -13,63 +12,55 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.IBinder;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+/**
+ * Optional Device Admin helper: on screen-off, lock the phone with the
+ * <b>system</b> keyguard ({@code lockNow}).
+ *
+ * <p>This service must never start an activity over the lock screen, never
+ * turn the screen back on, and never pin the app. Doing those things trapped
+ * phones so Home and the app PIN were both unreachable.
+ */
 public class LockGateService extends Service {
     public static final String PREFS = "kysmindset-lock";
     public static final String KEY_DEVICE_LOCK = "deviceLock";
     public static final String ACTION_START = "app.kysmindset.security.LOCK_GATE_START";
     public static final String ACTION_STOP = "app.kysmindset.security.LOCK_GATE_STOP";
+    public static final String ACTION_DISABLE = "app.kysmindset.security.LOCK_GATE_DISABLE";
     private static final String CHANNEL = "kys-lock";
     private static final int NOTIF = 42;
+    private static final long LOCK_DEBOUNCE_MS = 2000;
 
-    public static boolean active = false;
+    public static volatile boolean active = false;
+    private long lastLockAt = 0;
+
     private final BroadcastReceiver screen = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String a = intent.getAction();
-            if (Intent.ACTION_SCREEN_OFF.equals(a)) {
-                MainActivity.requestLock(context);
-                DeviceOwner.lockNow(context);
-            } else if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
-                if (!deviceLockOn(context)) return;
-                Intent launch = new Intent(context, MainActivity.class);
-                launch.setAction("app.kysmindset.security.LOCK");
-                launch.addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK
-                        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
-                );
-                Bundle opts = null;
-                if (Build.VERSION.SDK_INT >= 27) {
-                    ActivityOptions options = ActivityOptions.makeBasic();
-                    try {
-                        ActivityOptions.class
-                            .getMethod("setShowWhenLocked", boolean.class)
-                            .invoke(options, true);
-                    } catch (Exception ignored) {
-                    }
-                    if (Build.VERSION.SDK_INT >= 28 && DeviceOwner.isOwner(context)) {
-                        try {
-                            options.setLockTaskEnabled(true);
-                        } catch (Exception ignored) {
-                        }
-                    }
-                    opts = options.toBundle();
-                }
-                if (opts != null) context.startActivity(launch, opts);
-                else context.startActivity(launch);
-            }
+            if (intent == null || !Intent.ACTION_SCREEN_OFF.equals(intent.getAction())) return;
+            if (!deviceLockOn(context)) return;
+            if (!DeviceOwner.isAdmin(context)) return;
+            long now = System.currentTimeMillis();
+            if (now - lastLockAt < LOCK_DEBOUNCE_MS) return;
+            lastLockAt = now;
+            DeviceOwner.lockNow(context);
         }
     };
 
     public static boolean deviceLockOn(Context ctx) {
         SharedPreferences p = ctx.getSharedPreferences(PREFS, MODE_PRIVATE);
-        return p.getBoolean(KEY_DEVICE_LOCK, true);
+        return p.getBoolean(KEY_DEVICE_LOCK, false);
+    }
+
+    public static void setDeviceLockOn(Context ctx, boolean on) {
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DEVICE_LOCK, on)
+            .apply();
     }
 
     @Override
@@ -77,15 +68,12 @@ public class LockGateService extends Service {
         super.onCreate();
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch =
-                new NotificationChannel(CHANNEL, "Lock screen", NotificationManager.IMPORTANCE_LOW);
+                new NotificationChannel(CHANNEL, "Phone lock", NotificationManager.IMPORTANCE_LOW);
             ch.setShowBadge(false);
             NotificationManager nm = getSystemService(NotificationManager.class);
             if (nm != null) nm.createNotificationChannel(ch);
         }
-        IntentFilter f = new IntentFilter();
-        f.addAction(Intent.ACTION_SCREEN_OFF);
-        f.addAction(Intent.ACTION_SCREEN_ON);
-        f.addAction(Intent.ACTION_USER_PRESENT);
+        IntentFilter f = new IntentFilter(Intent.ACTION_SCREEN_OFF);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(screen, f, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -96,16 +84,24 @@ public class LockGateService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
-        if (ACTION_STOP.equals(action)) {
+        if (ACTION_STOP.equals(action) || ACTION_DISABLE.equals(action)) {
+            if (ACTION_DISABLE.equals(action)) setDeviceLockOn(this, false);
+            active = false;
+            stopForeground(true);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (!deviceLockOn(this)) {
             active = false;
             stopForeground(true);
             stopSelf();
             return START_NOT_STICKY;
         }
         active = true;
-        DeviceOwner.applyLockPolicies(this);
         Intent open = new Intent(this, MainActivity.class);
-        open.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        open.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        open.setAction(Intent.ACTION_MAIN);
+        open.addCategory(Intent.CATEGORY_LAUNCHER);
         PendingIntent pi =
             PendingIntent.getActivity(
                 this,
@@ -113,12 +109,22 @@ public class LockGateService extends Service {
                 open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
+        Intent disable = new Intent(this, LockGateService.class);
+        disable.setAction(ACTION_DISABLE);
+        PendingIntent pOff =
+            PendingIntent.getService(
+                this,
+                1,
+                disable,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
         Notification n =
             new NotificationCompat.Builder(this, CHANNEL)
-                .setContentTitle("Kysmindset lock")
-                .setContentText("Watching screen off — tap to open the lock screen")
+                .setContentTitle("Kysmindset phone lock")
+                .setContentText("Screen off uses your system PIN. Home still works.")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
+                .addAction(0, "Turn off", pOff)
                 .setOngoing(true)
                 .setSilent(true)
                 .build();

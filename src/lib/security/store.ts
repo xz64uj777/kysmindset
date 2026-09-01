@@ -226,6 +226,7 @@ export const useSecurity = create<SecurityState>()(
         autoScanMin: 30,
         pin: "1234",
         autoLock: true,
+        deviceLock: false,
       },
       permissions: DEFAULT_PERMISSIONS,
       history: [],
@@ -930,7 +931,7 @@ export const useSecurity = create<SecurityState>()(
           lastTamper: p.lastTamper ?? null,
           activities: current.activities,
           honeypots: Array.isArray(p.honeypots) ? p.honeypots : current.honeypots,
-          settings: { ...current.settings, ...(p.settings ?? {}) },
+          settings: { ...current.settings, ...(p.settings ?? {}), deviceLock: false },
           connection: current.connection,
         };
       },

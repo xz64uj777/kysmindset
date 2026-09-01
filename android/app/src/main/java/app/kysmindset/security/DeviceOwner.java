@@ -57,7 +57,7 @@ public final class DeviceOwner {
         i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx));
         i.putExtra(
             DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-            "Allows Kysmindset to lock the phone when the screen turns off and to show its own lock screen when it turns on. No computer or factory reset."
+            "Allows Kysmindset to lock the phone with your system PIN when you ask it to. It will not cover the Android lock screen or hide Home."
         );
         return i;
     }
@@ -71,22 +71,18 @@ public final class DeviceOwner {
             m.setLockTaskPackages(a, new String[] {ctx.getPackageName()});
         } catch (Exception ignored) {
         }
+        // Keep Home, Recents, notifications, and keyguard. FEATURE_NONE trapped phones.
         if (Build.VERSION.SDK_INT >= 28) {
             try {
-                m.setLockTaskFeatures(a, DevicePolicyManager.LOCK_TASK_FEATURE_NONE);
+                int features =
+                    DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW
+                        | DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+                        | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
+                        | DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS;
+                m.setLockTaskFeatures(a, features);
             } catch (Exception ignored) {
             }
-        }
-        try {
-            m.setUninstallBlocked(a, ctx.getPackageName(), true);
-        } catch (Exception ignored) {
-        }
-        try {
-            m.setKeyguardDisabledFeatures(
-                a,
-                DevicePolicyManager.KEYGUARD_DISABLE_FEATURES_ALL
-            );
-        } catch (Exception ignored) {
         }
         try {
             m.setDeviceOwnerLockScreenInfo(a, "Kysmindset");
@@ -136,7 +132,10 @@ public final class DeviceOwner {
         DevicePolicyManager m = dpm(ctx);
         if (m != null) {
             try {
-                if (isOwner(ctx)) m.clearDeviceOwnerApp(ctx.getPackageName());
+                if (isOwner(ctx)) {
+                    tryDisableKeyguard(ctx, false);
+                    m.clearDeviceOwnerApp(ctx.getPackageName());
+                }
             } catch (Exception ignored) {
             }
             try {
@@ -145,6 +144,7 @@ public final class DeviceOwner {
             }
         }
         setPinOnLock(ctx, false);
+        LockGateService.setDeviceLockOn(ctx, false);
         return statusJson(ctx);
     }
 

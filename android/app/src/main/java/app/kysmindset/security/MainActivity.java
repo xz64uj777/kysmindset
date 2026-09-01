@@ -1,7 +1,6 @@
 package app.kysmindset.security;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -32,21 +31,12 @@ public class MainActivity extends FragmentActivity {
     private static final int VPN_REQ = 91;
     private static final int ADMIN_REQ = 92;
     private WebView web;
-    private boolean gated = true;
-
-    public static void requestLock(Context ctx) {
-        Intent i = new Intent(ctx, MainActivity.class);
-        i.setAction("app.kysmindset.security.LOCK");
-        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        ctx.startActivity(i);
-    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        DeviceOwner.applyLockPolicies(this);
-        applyLockWindow(true);
+        recoverFromKiosk();
         web = new WebView(this);
         setContentView(web);
         WebSettings s = web.getSettings();
@@ -65,60 +55,35 @@ public class MainActivity extends FragmentActivity {
         web.setWebViewClient(new WebViewClient());
         web.addJavascriptInterface(new KysBridge(), "KysAndroid");
         web.loadUrl("file:///android_asset/www/index.html");
-        startLockGate();
-        handleLockIntent(getIntent());
+        if (LockGateService.deviceLockOn(this) && DeviceOwner.isAdmin(this)) {
+            startLockGate();
+        }
     }
 
-    @SuppressWarnings("deprecation")
-    private void applyLockWindow(boolean on) {
-        gated = on;
+    /** Drop every flag that can sit on top of the Android lock screen or eat Home. */
+    private void recoverFromKiosk() {
         if (Build.VERSION.SDK_INT >= 27) {
-            setShowWhenLocked(on);
-            setTurnScreenOn(on);
+            setShowWhenLocked(false);
+            setTurnScreenOn(false);
         }
-        if (on) {
-            getWindow().addFlags(
+        getWindow()
+            .clearFlags(
                 WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
                     | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
                     | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            );
-            hideSystemBars();
-        } else {
-            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            showSystemBars();
-        }
-        applyLockTask(on);
-    }
-
-    private void applyLockTask(boolean on) {
-        DeviceOwner.applyLockPolicies(this);
+                    | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         try {
-            if (on && canPin()) startLockTask();
-            else if (!on) stopLockTask();
+            stopLockTask();
         } catch (Exception ignored) {
         }
     }
 
-    private boolean canPin() {
-        if (DeviceOwner.isOwner(this) && DeviceOwner.lockTaskPermitted(this)) return true;
-        return DeviceOwner.pinOnLock(this);
-    }
-
-    private void hideSystemBars() {
-        View decor = getWindow().getDecorView();
-        decor.setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        );
-    }
-
-    private void showSystemBars() {
-        View decor = getWindow().getDecorView();
-        decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+    private void applyLockWindow(boolean locked) {
+        // locked = in-app PIN session only. Never overlay keyguard, never pin.
+        recoverFromKiosk();
+        if (!locked) return;
     }
 
     private void startLockGate() {
@@ -135,35 +100,31 @@ public class MainActivity extends FragmentActivity {
         startService(i);
     }
 
-    private void handleLockIntent(Intent intent) {
-        if (intent == null) return;
-        if ("app.kysmindset.security.LOCK".equals(intent.getAction())) {
-            applyLockWindow(true);
-            sendEvent("kys-gate", "lock");
-        }
+    private void leaveToHome() {
+        recoverFromKiosk();
+        moveTaskToBack(true);
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        handleLockIntent(intent);
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (LockGateService.deviceLockOn(this) && !gated) {
-            gated = true;
+        recoverFromKiosk();
+        if (intent != null && "app.kysmindset.security.LOCK".equals(intent.getAction())) {
             sendEvent("kys-gate", "lock");
         }
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // Do not re-lock or pin here. That loop made PIN + fingerprint unreachable.
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
-        if (gated) hideSystemBars();
-        DeviceOwner.applyLockPolicies(this);
+        recoverFromKiosk();
     }
 
     private void sendEvent(String name, String result) {
@@ -206,9 +167,9 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        recoverFromKiosk();
         if (requestCode == ADMIN_REQ) {
-            if (DeviceOwner.isAdmin(this)) {
-                DeviceOwner.applyLockPolicies(this);
+            if (DeviceOwner.isAdmin(this) && LockGateService.deviceLockOn(this)) {
                 startLockGate();
             }
             return;
@@ -297,12 +258,17 @@ public class MainActivity extends FragmentActivity {
         }
 
         @JavascriptInterface
+        public void goHome() {
+            runOnUiThread(MainActivity.this::leaveToHome);
+        }
+
+        @JavascriptInterface
         public void setDeviceLock(boolean on) {
-            SharedPreferences prefs = getSharedPreferences(LockGateService.PREFS, MODE_PRIVATE);
-            prefs.edit().putBoolean(LockGateService.KEY_DEVICE_LOCK, on).apply();
+            LockGateService.setDeviceLockOn(MainActivity.this, on);
             runOnUiThread(
                 () -> {
-                    if (on) startLockGate();
+                    recoverFromKiosk();
+                    if (on && DeviceOwner.isAdmin(MainActivity.this)) startLockGate();
                     else stopLockGate();
                 });
         }
@@ -347,6 +313,12 @@ public class MainActivity extends FragmentActivity {
 
         @JavascriptInterface
         public String removeAdmin() {
+            LockGateService.setDeviceLockOn(MainActivity.this, false);
+            runOnUiThread(
+                () -> {
+                    recoverFromKiosk();
+                    stopLockGate();
+                });
             return DeviceOwner.remove(MainActivity.this);
         }
 
@@ -417,11 +389,6 @@ public class MainActivity extends FragmentActivity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        if (gated) return;
-        if (web != null && web.canGoBack()) {
-            web.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        leaveToHome();
     }
 }
