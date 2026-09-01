@@ -1,6 +1,7 @@
 package app.kysmindset.security;
 
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -85,7 +86,8 @@ public class MainActivity extends FragmentActivity {
     }
 
     private boolean inLockTask() {
-        return getLockTaskModeState() != LOCK_TASK_MODE_NONE;
+        ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+        return am != null && am.getLockTaskModeState() != ActivityManager.LOCK_TASK_MODE_NONE;
     }
 
     private void stopPin() {
