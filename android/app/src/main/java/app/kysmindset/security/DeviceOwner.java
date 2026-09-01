@@ -71,15 +71,18 @@ public final class DeviceOwner {
             m.setLockTaskPackages(a, new String[] {ctx.getPackageName()});
         } catch (Exception ignored) {
         }
-        // Keep Home, Recents, notifications, and keyguard. FEATURE_NONE trapped phones.
+        // Keep Recents, notifications, keyguard, and power menu.
+        // Home is blocked only while the user opted into pin. FEATURE_NONE trapped phones.
         if (Build.VERSION.SDK_INT >= 28) {
             try {
                 int features =
-                    DevicePolicyManager.LOCK_TASK_FEATURE_HOME
-                        | DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW
+                    DevicePolicyManager.LOCK_TASK_FEATURE_OVERVIEW
                         | DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
                         | DevicePolicyManager.LOCK_TASK_FEATURE_KEYGUARD
                         | DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS;
+                if (!pinOnLock(ctx)) {
+                    features |= DevicePolicyManager.LOCK_TASK_FEATURE_HOME;
+                }
                 m.setLockTaskFeatures(a, features);
             } catch (Exception ignored) {
             }
@@ -124,6 +127,7 @@ public final class DeviceOwner {
 
     public static String applyPin(Context ctx, boolean on) {
         setPinOnLock(ctx, on);
+        applyLockPolicies(ctx);
         return statusJson(ctx);
     }
 

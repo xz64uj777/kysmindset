@@ -102,20 +102,21 @@ function AdminControls({
     <div className="space-y-3">
       <p className="text-xs text-muted">
         Admin is on. Screen off can lock the phone with your system PIN if you enable that toggle.
-        Home and Back always leave unless you pin the app.
+        Home and Back leave unless you pin. Pinning uses Android’s own screen pin — Recents + Back
+        unpins.
       </p>
       <ToggleRow
         title="Pin app while locked"
-        desc="Uses Android screen pinning so Home is blocked until you unpin (usually Recents + Back). For a tighter pin, also turn on Ask for PIN before unpinning in system Security settings."
+        desc="Android screen pinning. Home is blocked. Back does not leave. Unpin with Recents + Back (or turn this off). The system lock screen still shows first."
         checked={Boolean(st.pinOnLock)}
         onChange={(v) => {
           const next = applyAndroidPin(v);
           setSt(next);
           if (v) {
             androidPinNow();
-            toast.message("Android may ask to pin this screen.");
+            toast.message("Android may ask to pin this screen. Recents + Back unpins.");
           } else {
-            toast.success("Screen pin off.");
+            toast.success("Screen pin off. Home and Back leave again.");
           }
         }}
       />

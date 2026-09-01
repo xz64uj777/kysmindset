@@ -14,6 +14,8 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -36,7 +38,7 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        recoverFromKiosk();
+        clearOverlayFlags();
         web = new WebView(this);
         setContentView(web);
         WebSettings s = web.getSettings();
@@ -58,10 +60,16 @@ public class MainActivity extends FragmentActivity {
         if (LockGateService.deviceLockOn(this) && DeviceOwner.isAdmin(this)) {
             startLockGate();
         }
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher()
+                .registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    (OnBackInvokedCallback) this::leaveToHome);
+        }
     }
 
-    /** Drop every flag that can sit on top of the Android lock screen or eat Home. */
-    private void recoverFromKiosk() {
+    /** Never sit on top of the Android lock screen. Does not change pinning. */
+    private void clearOverlayFlags() {
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(false);
             setTurnScreenOn(false);
@@ -74,15 +82,50 @@ public class MainActivity extends FragmentActivity {
                     | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         View decor = getWindow().getDecorView();
         decor.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+    }
+
+    private boolean inLockTask() {
+        return getLockTaskModeState() != LOCK_TASK_MODE_NONE;
+    }
+
+    private void stopPin() {
         try {
             stopLockTask();
         } catch (Exception ignored) {
         }
     }
 
+    private void startPin() {
+        DeviceOwner.applyLockPolicies(this);
+        try {
+            startLockTask();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Keep overlay flags off. If the user opted into screen pin, stay pinned
+     * (re-enter after the system lock screen). Otherwise drop lock-task.
+     */
+    private void maintainPin() {
+        clearOverlayFlags();
+        if (DeviceOwner.pinOnLock(this)) {
+            if (!inLockTask()) startPin();
+        } else {
+            stopPin();
+        }
+    }
+
+    private void recoverFromKiosk() {
+        DeviceOwner.setPinOnLock(this, false);
+        clearOverlayFlags();
+        stopPin();
+    }
+
     private void applyLockWindow(boolean locked) {
-        // locked = in-app PIN session only. Never overlay keyguard, never pin.
-        recoverFromKiosk();
+        // In-app PIN only. Never overlay keyguard. Never unpin here —
+        // hydrate used to call setGate(false) and that killed screen pin.
+        clearOverlayFlags();
         if (!locked) return;
     }
 
@@ -101,7 +144,11 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void leaveToHome() {
-        recoverFromKiosk();
+        // While pinned, Back/Home must not dump you to the launcher.
+        // Unpin is Recents + Back (system), or turn the pin toggle off.
+        if (DeviceOwner.pinOnLock(this) && inLockTask()) return;
+        clearOverlayFlags();
+        stopPin();
         moveTaskToBack(true);
     }
 
@@ -109,7 +156,7 @@ public class MainActivity extends FragmentActivity {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        recoverFromKiosk();
+        maintainPin();
         if (intent != null && "app.kysmindset.security.LOCK".equals(intent.getAction())) {
             sendEvent("kys-gate", "lock");
         }
@@ -118,13 +165,13 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Do not re-lock or pin here. That loop made PIN + fingerprint unreachable.
+        // Do not re-lock or re-pin here. That loop made PIN + fingerprint unreachable.
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        recoverFromKiosk();
+        maintainPin();
     }
 
     private void sendEvent(String name, String result) {
@@ -167,7 +214,7 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        recoverFromKiosk();
+        maintainPin();
         if (requestCode == ADMIN_REQ) {
             if (DeviceOwner.isAdmin(this) && LockGateService.deviceLockOn(this)) {
                 startLockGate();
@@ -267,7 +314,7 @@ public class MainActivity extends FragmentActivity {
             LockGateService.setDeviceLockOn(MainActivity.this, on);
             runOnUiThread(
                 () -> {
-                    recoverFromKiosk();
+                    maintainPin();
                     if (on && DeviceOwner.isAdmin(MainActivity.this)) startLockGate();
                     else stopLockGate();
                 });
@@ -291,7 +338,9 @@ public class MainActivity extends FragmentActivity {
 
         @JavascriptInterface
         public String applyPin(boolean on) {
-            return DeviceOwner.applyPin(MainActivity.this, on);
+            String json = DeviceOwner.applyPin(MainActivity.this, on);
+            runOnUiThread(MainActivity.this::maintainPin);
+            return json;
         }
 
         @JavascriptInterface
@@ -299,10 +348,7 @@ public class MainActivity extends FragmentActivity {
             runOnUiThread(
                 () -> {
                     DeviceOwner.setPinOnLock(MainActivity.this, true);
-                    try {
-                        startLockTask();
-                    } catch (Exception ignored) {
-                    }
+                    startPin();
                 });
         }
 
@@ -313,6 +359,7 @@ public class MainActivity extends FragmentActivity {
 
         @JavascriptInterface
         public String removeAdmin() {
+            DeviceOwner.setPinOnLock(MainActivity.this, false);
             LockGateService.setDeviceLockOn(MainActivity.this, false);
             runOnUiThread(
                 () -> {
