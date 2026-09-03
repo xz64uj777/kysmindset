@@ -58,14 +58,12 @@ jobs:
           tag_name: apk-latest
           name: Kysmindset APK 2.1
           body: |
-            **2.1 lock-escape build** (versionCode ${{ github.run_number }})
+            **2.1** (versionCode ${{ github.run_number }})
 
-            This build does **not** sit on top of the Android lock screen.
-            Home and Back always leave. Screen-off only uses your system PIN.
+            Lock phone now: Android lock first, then this app’s PIN (even if you were in the app).
+            Pin while locked still uses Android’s pin. This build does **not** sit on the system lock screen.
 
-            Before installing over a trapped 2.0.x APK:
-            1. Settings → Security → Device admin apps → Kysmindset → Deactivate
-            2. Or uninstall, then install this APK
+            After a scan, Overview keeps a Found panel (hosts + assessment) — the live feed is not the only result.
 
             PIN 1234 (app PIN, not phone PIN).
             Debug APK — Play Protect may warn.

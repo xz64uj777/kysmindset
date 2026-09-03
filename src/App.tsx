@@ -33,7 +33,7 @@ export function App() {
   useEffect(() => {
     const onGate = (e: Event) => {
       const d = String((e as CustomEvent).detail ?? "");
-      if (d === "lock" && useSecurity.getState().unlocked) lock();
+      if (d === "lock") lock();
     };
     window.addEventListener("kys-gate", onGate);
     return () => window.removeEventListener("kys-gate", onGate);

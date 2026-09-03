@@ -178,23 +178,27 @@ public class MainActivity extends FragmentActivity {
 
     private void requestAppLock() {
         pendingGate = "lock";
-        flushGate();
+        lockAfterUnlock = true;
+        injectLockJs();
+    }
+
+    private void injectLockJs() {
+        if (web == null) return;
+        final String js =
+            "(function(){try{sessionStorage.removeItem('kysmindset_unlocked')}catch(e){}"
+                + "window.dispatchEvent(new CustomEvent('kys-gate',{detail:'lock'}));})()";
+        Runnable fire = () -> {
+            if (web != null && pageReady) web.evaluateJavascript(js, null);
+        };
+        web.post(fire);
+        web.postDelayed(fire, 400);
+        web.postDelayed(fire, 1200);
     }
 
     private void flushGate() {
-        if (!pageReady || pendingGate == null || web == null) return;
-        final String g = pendingGate;
+        if (pendingGate == null) return;
         pendingGate = null;
-        web.postDelayed(
-            () -> {
-                String js =
-                    "(function(){try{sessionStorage.removeItem('kysmindset_unlocked')}catch(e){}"
-                        + "window.dispatchEvent(new CustomEvent('kys-gate',{detail:'"
-                        + g
-                        + "'}));})()";
-                web.evaluateJavascript(js, null);
-            },
-            400);
+        injectLockJs();
     }
 
     @Override
@@ -404,6 +408,7 @@ public class MainActivity extends FragmentActivity {
             runOnUiThread(
                 () -> {
                     lockAfterUnlock = true;
+                    injectLockJs();
                     if (LockGateService.deviceLockOn(MainActivity.this)
                         && DeviceOwner.isAdmin(MainActivity.this)) {
                         startLockGate();

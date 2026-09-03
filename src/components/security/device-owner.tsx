@@ -15,7 +15,7 @@ import {
   requestAndroidAdmin,
   type OwnerStatus,
 } from "@/lib/android-lock";
-import { Panel, PanelHeader } from "./chrome";
+import { useSecurity } from "@/lib/security/store";
 
 export function DeviceOwnerPanel() {
   const android = isAndroidApp();
@@ -121,7 +121,15 @@ function AdminControls({
         }}
       />
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => androidLockNow()}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            useSecurity.getState().lock();
+            androidLockNow();
+            toast.message("Android lock first. This app’s PIN is waiting behind it.");
+          }}
+        >
           Lock phone now
         </Button>
         <Button

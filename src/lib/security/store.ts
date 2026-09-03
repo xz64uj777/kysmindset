@@ -678,6 +678,7 @@ export const useSecurity = create<SecurityState>()(
         await wait(180);
         push("Scan complete", "ok");
         set({ scanning: false, lastScan: Date.now() });
+        get().runDeepScan();
       },
       runDeepScan: () => {
         set({ deepScanning: true, deepScan: null });
@@ -909,6 +910,7 @@ export const useSecurity = create<SecurityState>()(
         history: s.history.slice(0, 40),
         scanLog: (s.scanLog ?? []).slice(0, 40),
         lastScan: s.lastScan,
+        deepScan: s.deepScan,
         killSwitch: s.killSwitch,
         droppedPackets: s.droppedPackets,
         tamperLog: (s.tamperLog ?? []).slice(0, 40),

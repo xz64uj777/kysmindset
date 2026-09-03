@@ -2,9 +2,11 @@ import { Activity, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Trash2,
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useScore, useSecurity } from "@/lib/security/store";
 import { cn, timeAgo } from "@/lib/utils";
 import { Panel, PanelHeader, ScoreTone, StatusDot } from "./chrome";
+import { GroupedActivityList } from "./grouped-list";
 
 export function OverviewPanel() {
   const activities = useSecurity((s) => s.activities);
@@ -89,6 +91,7 @@ export function OverviewPanel() {
         <PanelHeader icon={<Terminal className="size-4" />} title="Live feed" subtitle="Engine output while a scan runs" />
         <ScanFeed log={scanLog} scanning={scanning} />
       </Panel>
+      <FoundPanel />
       <QuickActions />
       <Panel>
         <PanelHeader
@@ -138,6 +141,74 @@ export function OverviewPanel() {
         </p>
       </Panel>
     </div>
+  );
+}
+
+function FoundPanel() {
+  const lastScan = useSecurity((s) => s.lastScan);
+  const deepScan = useSecurity((s) => s.deepScan);
+  const scanning = useSecurity((s) => s.scanning);
+  const activities = useSecurity((s) => s.activities);
+  const found = activities.filter(
+    (a) => a.type === "traffic" && (a.status === "suspicious" || a.status === "unknown" || a.status === "blocked"),
+  );
+  if (!lastScan && !deepScan) return null;
+  return (
+    <Panel>
+      <PanelHeader
+        icon={<ShieldAlert className="size-4" />}
+        title="Found"
+        subtitle={
+          scanning
+            ? "Scan still running — results stay here when it finishes"
+            : lastScan
+              ? `Last scan ${timeAgo(lastScan)}`
+              : "From the last scan"
+        }
+        iconClass="bg-rose-dim text-rose"
+      />
+      {deepScan ? (
+        <div className="mb-3 space-y-2">
+          <p className="text-sm text-fg">{deepScan.assessment}</p>
+          {deepScan.vulnerabilities.length > 0 ? (
+            <ul className="space-y-1.5">
+              {deepScan.vulnerabilities.map((v) => (
+                <li key={v.name} className="rounded-md border border-line bg-elevated px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-medium text-fg">{v.name}</span>
+                    <Badge tone={v.severity === "critical" || v.severity === "high" ? "rose" : v.severity === "medium" ? "amber" : "muted"}>
+                      {v.severity}
+                    </Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {deepScan.recommendations.length > 0 ? (
+            <ul className="space-y-1 text-micro text-muted">
+              {deepScan.recommendations.map((r) => (
+                <li key={r.action}>
+                  <span className="uppercase text-subtle">{r.priority}</span>
+                  {" — "}
+                  {r.action}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {deepScan.strengths.length > 0 ? (
+            <p className="text-micro text-emerald">{deepScan.strengths.join(" · ")}</p>
+          ) : null}
+        </div>
+      ) : null}
+      <GroupedActivityList
+        items={found}
+        empty={
+          scanning
+            ? "Hosts land here as the scan classifies them."
+            : "No third-party or tracker hosts in this session."
+        }
+      />
+    </Panel>
   );
 }
 
