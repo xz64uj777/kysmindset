@@ -103,7 +103,7 @@ public class LockGateService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification n =
             new NotificationCompat.Builder(context, CHANNEL)
-                .setContentTitle("Kysmindset")
+                .setContentTitle("Kysmindset 2")
                 .setContentText("Unlock this app")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
@@ -178,7 +178,7 @@ public class LockGateService extends Service {
             );
         Notification n =
             new NotificationCompat.Builder(this, CHANNEL)
-                .setContentTitle("Kysmindset phone lock")
+                .setContentTitle("Kysmindset 2 lock")
                 .setContentText("System PIN first, then this app. Home still leaves.")
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)

@@ -483,7 +483,7 @@ public class MainActivity extends FragmentActivity {
                             });
                     BiometricPrompt.PromptInfo info =
                         new BiometricPrompt.PromptInfo.Builder()
-                            .setTitle("Unlock Kysmindset")
+                            .setTitle("Unlock Kysmindset 2")
                             .setSubtitle("Verify fingerprint or face")
                             .setNegativeButtonText("Cancel")
                             .setAllowedAuthenticators(authenticators)

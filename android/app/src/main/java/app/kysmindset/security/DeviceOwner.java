@@ -13,7 +13,7 @@ public final class DeviceOwner {
     public static final String KEY_REPLACE_KEYGUARD = "replaceKeyguard";
     public static final String KEY_PIN_ON_LOCK = "pinOnLock";
     public static final String ADB =
-        "adb shell dpm set-device-owner app.kysmindset.security/.KysDeviceAdminReceiver";
+        "adb shell dpm set-device-owner app.kysmindset.sec2/app.kysmindset.security.KysDeviceAdminReceiver";
 
     private DeviceOwner() {}
 
@@ -57,7 +57,7 @@ public final class DeviceOwner {
         i.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, admin(ctx));
         i.putExtra(
             DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-            "Allows Kysmindset to lock the phone with your system PIN when you ask it to. It will not cover the Android lock screen or hide Home."
+            "Allows Kysmindset 2 to lock the phone with your system PIN when you ask it to. It will not cover the Android lock screen or hide Home."
         );
         return i;
     }
@@ -88,7 +88,7 @@ public final class DeviceOwner {
             }
         }
         try {
-            m.setDeviceOwnerLockScreenInfo(a, "Kysmindset");
+            m.setDeviceOwnerLockScreenInfo(a, "Kysmindset 2");
         } catch (Exception ignored) {
         }
         if (prefs(ctx).getBoolean(KEY_REPLACE_KEYGUARD, false)) {

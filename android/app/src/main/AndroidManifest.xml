@@ -25,7 +25,7 @@
     <application
         android:allowBackup="true"
         android:icon="@android:drawable/ic_lock_lock"
-        android:label="Kysmindset"
+        android:label="Kysmindset 2"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true">
         <activity
@@ -44,7 +44,7 @@
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="app.kysmindset.security.files"
+            android:authorities="app.kysmindset.sec2.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

@@ -59,7 +59,7 @@ public class KillVpnService extends VpnService {
                 ? new Notification.Builder(this, CH)
                 : new Notification.Builder(this);
         Notification n =
-            b.setContentTitle("Kysmindset air gap")
+            b.setContentTitle("Kysmindset 2 air gap")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
@@ -88,7 +88,7 @@ public class KillVpnService extends VpnService {
     private void startTunnel() {
         if (tun != null) return;
         Builder b = new Builder();
-        b.setSession("Kysmindset Air Gap");
+        b.setSession("Kysmindset 2 Air Gap");
         b.setMtu(1500);
         b.addAddress("10.8.0.2", 32);
         b.addRoute("0.0.0.0", 0);

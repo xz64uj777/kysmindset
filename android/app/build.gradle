@@ -15,7 +15,7 @@ android {
     namespace "app.kysmindset.security"
     compileSdk 35
     defaultConfig {
-        applicationId "app.kysmindset.security"
+        applicationId "app.kysmindset.sec2"
         minSdk 26
         targetSdk 35
         versionCode 3

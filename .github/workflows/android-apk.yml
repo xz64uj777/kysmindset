@@ -56,14 +56,13 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: Kysmindset APK 2.1
+          name: Kysmindset 2 APK
           body: |
-            **2.1** (versionCode ${{ github.run_number }})
+            **Kysmindset 2** (versionCode ${{ github.run_number }})
 
-            Lock phone now: Android lock first, then this app’s PIN (even if you were in the app).
-            Pin while locked still uses Android’s pin. This build does **not** sit on the system lock screen.
-
-            After a scan, Overview keeps a Found panel (hosts + assessment) — the live feed is not the only result.
+            New package (`app.kysmindset.sec2`) so it installs **next to** the original Kysmindset.
+            Lock phone now: Android lock first, then this app’s PIN.
+            After a scan, Overview keeps a Found panel.
 
             PIN 1234 (app PIN, not phone PIN).
             Debug APK — Play Protect may warn.

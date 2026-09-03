@@ -135,7 +135,7 @@ export function LockScreen() {
       <header className="relative z-10 flex items-center justify-between pt-1 text-2xs text-subtle">
         <span className="flex items-center gap-1.5 font-medium tracking-wide text-muted">
           <Shield className="size-3 text-cyan" />
-          Kysmindset
+          Kysmindset 2
         </span>
         <span className="flex items-center gap-2 font-mono tabular-nums">
           {killSwitch ? (
