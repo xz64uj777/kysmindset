@@ -30,7 +30,7 @@ public final class AppUpdate {
     public static final String RELEASE_API =
         "https://api.github.com/repos/xz64uj777/kysmindset/releases/tags/apk-latest";
     public static final String APK_URL =
-        "https://github.com/xz64uj777/kysmindset/releases/download/apk-latest/app-debug.apk";
+        "https://github.com/xz64uj777/kysmindset/releases/download/apk-latest/Kysmindset-2.apk";
     public static final String ACTION_INSTALLED = "app.kysmindset.security.UPDATE_INSTALLED";
 
     public interface Sink {

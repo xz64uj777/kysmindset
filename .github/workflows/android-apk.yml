@@ -48,6 +48,18 @@ jobs:
         working-directory: android
         run: gradle assembleDebug --no-daemon
 
+      - name: Verify signed APK
+        run: |
+          APK=android/app/build/outputs/apk/debug/Kysmindset-2.apk
+          test -f "$APK"
+          python3 - <<PY
+          p="$APK"
+          data=open(p,"rb").read()
+          assert b"APK Sig Block 42" in data, "missing v2 signature"
+          print("signed", len(data), "bytes")
+          PY
+          cp "$APK" android/app/build/outputs/apk/debug/app-debug.apk
+
       - uses: actions/upload-artifact@v4
         with:
           name: kysmindset-apk
@@ -60,11 +72,13 @@ jobs:
           body: |
             **Kysmindset 2** (versionCode ${{ github.run_number }})
 
-            New package (`app.kysmindset.sec2`) so it installs **next to** the original Kysmindset.
-            Lock phone now: Android lock first, then this app’s PIN.
-            After a scan, Overview keeps a Found panel.
+            Installs next to the original. Do not use Update inside the old app.
+            Download this APK, open it from Files, allow the install.
 
-            PIN 1234 (app PIN, not phone PIN).
-            Debug APK — Play Protect may warn.
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+            PIN 1234. Play Protect may warn — Install anyway.
+
+            Lock phone now: Android lock first, then this app’s PIN.
+          files: |
+            android/app/build/outputs/apk/debug/Kysmindset-2.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
           make_latest: true

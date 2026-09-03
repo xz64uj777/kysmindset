@@ -21,18 +21,35 @@ android {
         versionCode 3
         versionName "2.1.0"
     }
+    signingConfigs {
+        kys {
+            storeFile rootProject.file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
     buildTypes {
         debug {
             minifyEnabled false
+            signingConfig signingConfigs.kys
         }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.kys
         }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "Kysmindset-2.apk"
+        }
     }
 }
 
