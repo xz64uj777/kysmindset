@@ -262,15 +262,11 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 
 function QuickActions() {
   const resolveAllThreats = useSecurity((s) => s.resolveAllThreats);
-  const clearResolved = useSecurity((s) => s.clearResolved);
   const refresh = useSecurity((s) => s.refresh);
   const killSwitch = useSecurity((s) => s.killSwitch);
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
   const threats = useSecurity(
     (s) => s.activities.filter((a) => a.status === "suspicious" || a.status === "unknown").length,
-  );
-  const resolved = useSecurity(
-    (s) => s.activities.filter((a) => a.status === "blocked" || a.status === "killed" || a.status === "resolved").length,
   );
   const actions = [
     {
@@ -299,15 +295,6 @@ function QuickActions() {
       disabled: threats === 0,
     },
     {
-      key: "clear",
-      label: "Clear Resolved",
-      desc: `Remove ${resolved} resolved items`,
-      color: "text-muted border-line bg-elevated hover:bg-white/10",
-      icon: Trash2,
-      onClick: clearResolved,
-      disabled: resolved === 0,
-    },
-    {
       key: "refresh",
       label: "Refresh Data",
       desc: "Reload all monitors",
@@ -325,7 +312,7 @@ function QuickActions() {
         subtitle="One-tap security operations"
         iconClass="bg-elevated text-muted"
       />
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {actions.map((a) => {
           const Icon = a.icon;
           return (

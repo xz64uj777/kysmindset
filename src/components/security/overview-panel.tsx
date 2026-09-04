@@ -1,4 +1,4 @@
-import { Activity, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Activity, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -311,16 +311,12 @@ function ScanFeed({
 
 function QuickActions() {
   const resolveAllThreats = useSecurity((s) => s.resolveAllThreats);
-  const clearResolved = useSecurity((s) => s.clearResolved);
   const refresh = useSecurity((s) => s.refresh);
   const killSwitch = useSecurity((s) => s.killSwitch);
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
   const setTab = useSecurity((s) => s.setTab);
   const activities = useSecurity((s) => s.activities);
   const pending = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
-  const resolved = activities.filter(
-    (a) => a.status === "blocked" || a.status === "killed" || a.status === "resolved",
-  ).length;
   const actions = [
     {
       key: "kill",
@@ -348,15 +344,6 @@ function QuickActions() {
       disabled: pending.length === 0,
     },
     {
-      key: "clear",
-      label: "Clear resolved",
-      desc: resolved ? "Remove finished rows" : "Board already clean",
-      color: "text-muted border-line bg-elevated hover:bg-white/10",
-      icon: Trash2,
-      onClick: clearResolved,
-      disabled: resolved === 0,
-    },
-    {
       key: "refresh",
       label: "Refresh",
       desc: "Reload monitors",
@@ -378,7 +365,7 @@ function QuickActions() {
           Open items are on Network — tap to review hosts
         </button>
       ) : null}
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
         {actions.map((a) => {
           const Icon = a.icon;
           return (

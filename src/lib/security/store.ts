@@ -167,7 +167,6 @@ export interface SecurityState {
   pause: (id: string) => boolean;
   resume: (id: string) => void;
   resolveAllThreats: () => void;
-  clearResolved: () => void;
   refresh: () => void;
   addAllow: (item: Omit<AllowItem, "id">) => void;
   removeAllow: (id: string) => void;
@@ -543,15 +542,6 @@ export const useSecurity = create<SecurityState>()(
             `${n} items`,
             "All suspicious items blocked.",
           ),
-        });
-      },
-      clearResolved: () => {
-        const keep = get().activities.filter(
-          (a) => a.status !== "resolved" && a.status !== "blocked" && a.status !== "killed",
-        );
-        set({
-          activities: keep,
-          history: pushHistory(get().history, "Cleared resolved", "Monitor", "Removed resolved items."),
         });
       },
       refresh: () => {
