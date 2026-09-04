@@ -12,7 +12,6 @@ import { GroupedActivityList } from "./grouped-list";
 
 export function OverviewPanel() {
   const activities = useSecurity((s) => s.activities);
-  const settings = useSecurity((s) => s.settings);
   const connection = useSecurity((s) => s.connection);
   const scanning = useSecurity((s) => s.scanning);
   const lastScan = useSecurity((s) => s.lastScan);
@@ -138,7 +137,6 @@ export function OverviewPanel() {
           {lastScan ? <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span> : null}
         </div>
         <p className="mt-3 text-micro text-muted">
-          Always On {settings.alwaysOn ? "on" : "off"} ·{" "}
           {connection.secure ? "Secure" : "Insecure"} link
           {killSwitch ? " · Air gap" : ""} · {allowlist.length} trusted · {indicators.length} learned indicators
         </p>
@@ -312,28 +310,10 @@ function ScanFeed({
 function QuickActions() {
   const resolveAllThreats = useSecurity((s) => s.resolveAllThreats);
   const refresh = useSecurity((s) => s.refresh);
-  const killSwitch = useSecurity((s) => s.killSwitch);
-  const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
   const setTab = useSecurity((s) => s.setTab);
   const activities = useSecurity((s) => s.activities);
   const pending = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
   const actions = [
-    {
-      key: "kill",
-      label: killSwitch ? "Stop Protection" : "Start Protection",
-      desc: killSwitch ? "Turn the VPN off" : "Cut other apps’ internet",
-      color: killSwitch
-        ? "text-red border-red/40 bg-red-dim hover:bg-red/20"
-        : "text-red border-red/20 bg-red-dim hover:bg-red/20",
-      icon: killSwitch ? WifiOff : Wifi,
-      onClick: () => {
-        const arming = !killSwitch;
-        toggleKillSwitch();
-        if (arming) toast.error("Kill switch armed — third-party fetches from this app are blocked.");
-        else toast.success("Kill switch released — third-party fetches allowed.");
-      },
-      disabled: false,
-    },
     {
       key: "block",
       label: "Block open items",
@@ -365,7 +345,7 @@ function QuickActions() {
           Open items are on Network — tap to review hosts
         </button>
       ) : null}
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {actions.map((a) => {
           const Icon = a.icon;
           return (

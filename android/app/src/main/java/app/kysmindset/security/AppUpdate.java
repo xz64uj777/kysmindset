@@ -126,6 +126,7 @@ public final class AppUpdate {
                         if (!owner
                             && Build.VERSION.SDK_INT >= 26
                             && !ctx.getPackageManager().canRequestPackageInstalls()) {
+                            MainActivity.skipNextAutoLock(ctx);
                             Intent perm =
                                 new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                             perm.setData(Uri.parse("package:" + ctx.getPackageName()));
@@ -267,6 +268,7 @@ public final class AppUpdate {
     }
 
     private static void installView(Context ctx, File apk) {
+        MainActivity.skipNextAutoLock(ctx);
         Uri uri =
             FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".files", apk);
         Intent i = new Intent(Intent.ACTION_VIEW);

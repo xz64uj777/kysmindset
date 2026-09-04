@@ -29,6 +29,7 @@ import androidx.core.app.NotificationCompat;
 public class LockGateService extends Service {
     public static final String PREFS = "kysmindset-lock";
     public static final String KEY_DEVICE_LOCK = "deviceLock";
+    public static final String KEY_AUTO_LOCK = "autoLock";
     public static final String ACTION_START = "app.kysmindset.security.LOCK_GATE_START";
     public static final String ACTION_STOP = "app.kysmindset.security.LOCK_GATE_STOP";
     public static final String ACTION_DISABLE = "app.kysmindset.security.LOCK_GATE_DISABLE";
@@ -70,6 +71,17 @@ public class LockGateService extends Service {
         ctx.getSharedPreferences(PREFS, MODE_PRIVATE)
             .edit()
             .putBoolean(KEY_DEVICE_LOCK, on)
+            .apply();
+    }
+
+    public static boolean autoLock(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO_LOCK, true);
+    }
+
+    public static void setAutoLock(Context ctx, boolean on) {
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AUTO_LOCK, on)
             .apply();
     }
 

@@ -46,6 +46,7 @@ export function ConfigPanel() {
 
   return (
     <div className="space-y-4">
+      {android ? null : (
       <Panel>
         <PanelHeader
           icon={<Download className="size-4" />}
@@ -58,15 +59,10 @@ export function ConfigPanel() {
           <InstallBar className="mb-0" />
         )}
       </Panel>
+      )}
       <Panel>
-        <PanelHeader icon={<Shield className="size-4" />} title="System Protection" subtitle="Always-on, auto-restart & tamper protection" />
+        <PanelHeader icon={<Shield className="size-4" />} title="System Protection" subtitle="Restart, lock, and scan" />
         <div className="space-y-3">
-          <ToggleRow
-            title="Always On"
-            desc="Keeps security monitoring active at all times. Screen stays awake."
-            checked={settings.alwaysOn}
-            onChange={(v) => patch({ alwaysOn: v })}
-          />
           <ToggleRow
             title="Auto Restart"
             desc="Brings Protection back after a reboot or if Android kills it."
@@ -75,20 +71,20 @@ export function ConfigPanel() {
           />
           <ToggleRow
             title="Tamper Protection"
-            desc="Blocks stop/pause of this PWA’s runtime and records the cause. Hosts can still be ended."
+            desc="Stops this app from ending its own listed processes. Does not stop Android from closing the app."
             checked={settings.tamperProtection}
             onChange={(v) => patch({ tamperProtection: v })}
           />
           <TamperLog />
           <ToggleRow
             title="Auto-Lockdown"
-            desc="Trigger lockdown on critical threats"
+            desc="When a scan finds tracker hosts, block them without asking."
             checked={settings.autoLockdown}
             onChange={(v) => patch({ autoLockdown: v })}
           />
           <ToggleRow
             title="Auto-Lock"
-            desc="Lock when you leave the installed app (home-screen mode)"
+            desc="Ask for this app’s PIN when you leave and come back."
             checked={settings.autoLock !== false}
             onChange={(v) => patch({ autoLock: v })}
           />
@@ -101,7 +97,7 @@ export function ConfigPanel() {
         </div>
         <div className="mt-4">
           <div className="mb-1 text-sm font-medium text-fg">Scheduled Auto-Scan</div>
-          <p className="mb-2 text-xs text-muted">Runs AI security scan automatically</p>
+          <p className="mb-2 text-xs text-muted">While Kysmindset is open, run a scan on this timer.</p>
           <div className="flex flex-wrap gap-1.5">
             {[0, 15, 30, 60, 180, 360].map((m) => (
               <button
@@ -122,8 +118,9 @@ export function ConfigPanel() {
         </div>
       </Panel>
 
+      {android ? null : (
       <Panel>
-        <PanelHeader icon={<Wifi className="size-4" />} title="WiFi Security" subtitle="Link status" />
+        <PanelHeader icon={<Wifi className="size-4" />} title="This page’s link" subtitle="This tab, not your Wi-Fi password" />
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-md border border-line bg-elevated p-2.5">
             <div className="text-xs text-subtle">Encryption</div>
@@ -143,6 +140,7 @@ export function ConfigPanel() {
           </div>
         </div>
       </Panel>
+      )}
 
       <Panel>
         <PanelHeader icon={<Lock className="size-4" />} title="App Permissions" subtitle="What this device has granted" />
@@ -254,8 +252,8 @@ function TamperLog() {
   if (events.length === 0) {
     return (
       <p className="px-1 text-micro text-subtle">
-        No tamper events yet. Ending Kysmindset or the Service Worker is blocked while this is
-        on. Lost service-worker control is logged as the cause.
+        No tamper events yet. Tamper only blocks ending this app’s own listed
+        processes from inside Kysmindset.
       </p>
     );
   }

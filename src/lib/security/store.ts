@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from "react";
-import { notify, setAppBadge, setDeviceKill, readNativeKill, hasAndroidBridge, setNativeAutoRestart, verifyNativePin, setNativePin, setNativePinIfUnset } from "@/lib/native";
+import { notify, setAppBadge, setDeviceKill, readNativeKill, hasAndroidBridge, setNativeAutoRestart, setNativeAutoLock, verifyNativePin, setNativePin, setNativePinIfUnset } from "@/lib/native";
 import { clamp, uid } from "@/lib/utils";
 import { DEFAULT_PERMISSIONS, HONEYPOT_DEFS, isProtectedName } from "./catalog";
 import {
@@ -251,6 +251,7 @@ export const useSecurity = create<SecurityState>()(
           });
           if (android) {
             setNativeAutoRestart(get().settings.autoRestart !== false);
+            setNativeAutoLock(get().settings.autoLock !== false);
             const p = get().settings.pin;
             if (/^\d{4}$/.test(p)) setNativePinIfUnset(p);
           }
@@ -641,8 +642,8 @@ export const useSecurity = create<SecurityState>()(
         await wait(220);
         push(
           get().killSwitch
-            ? "Kill switch is armed — checking whether device VPN is up"
-            : "Kill switch is idle (app-only unless VPN is approved)",
+            ? "Protection is on — checking whether the phone VPN is up"
+            : "Protection is off (app-only unless the VPN is approved)",
           get().killSwitch ? "learn" : "info",
         );
         await wait(220);
@@ -736,6 +737,7 @@ export const useSecurity = create<SecurityState>()(
       patchSettings: (patch) => {
         set({ settings: { ...get().settings, ...patch } });
         if (typeof patch.autoRestart === "boolean") setNativeAutoRestart(patch.autoRestart);
+        if (typeof patch.autoLock === "boolean") setNativeAutoLock(patch.autoLock);
       },
       setPermission: (id, granted) =>
         set({

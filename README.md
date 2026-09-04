@@ -10,7 +10,7 @@ Lock screen and security center for **this origin**. Real telemetry. Real Grok a
 - JS heap this page is using (when the browser exposes it)
 - Kill that fails **this app’s** third-party fetches (and a device VPN on the APK if you grant it)
 - PIN + fingerprint/face unlock for **this app**
-- Auto-lock of this app when the installed PWA is hidden
+- Auto-lock of this app when you leave and come back (APK and home-screen install)
 - Device Admin on the APK: `lockNow` uses your **system** PIN. Home and Back always leave
 - Grok 4.5 analysis of the live snapshot, only when you tap **Run Grok scan**
 - Local scan with no AI call

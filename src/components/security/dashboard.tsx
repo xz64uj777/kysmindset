@@ -14,7 +14,7 @@ import { useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import type { IntelSection, TabId } from "@/lib/security/types";
 import { useSecurity } from "@/lib/security/store";
-import { isStandalone, requestWakeLock, setAppBadge } from "@/lib/native";
+import { hasAndroidBridge, isStandalone, setAppBadge } from "@/lib/native";
 import { cn, timeAgo } from "@/lib/utils";
 import { BgField, StatusDot } from "./chrome";
 import { DecisionDialog } from "./dialogs";
@@ -70,20 +70,9 @@ export function Dashboard() {
   }, [settings.autoScanMin, runAiScan]);
 
   useEffect(() => {
-    if (!settings.alwaysOn) return;
-    let sent: WakeLockSentinel | null = null;
-    void requestWakeLock().then((s) => {
-      sent = s;
-    });
-    return () => {
-      void sent?.release();
-    };
-  }, [settings.alwaysOn]);
-
-  useEffect(() => {
     if (settings.autoLock === false) return;
     const onVis = () => {
-      if (document.visibilityState === "hidden" && isStandalone()) lock();
+      if (document.visibilityState === "hidden" && (isStandalone() || hasAndroidBridge())) lock();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
@@ -212,7 +201,7 @@ export function Dashboard() {
           </div>
         </nav>
 
-        <InstallBar />
+        {hasAndroidBridge() ? null : <InstallBar />}
 
         {killSwitch ? (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red/30 bg-red-dim px-3 py-3">

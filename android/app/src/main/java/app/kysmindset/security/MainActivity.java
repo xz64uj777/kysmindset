@@ -3,6 +3,7 @@ package app.kysmindset.security;
 import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.app.KeyguardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -40,6 +41,8 @@ public class MainActivity extends FragmentActivity {
     private WebView web;
     private boolean pageReady = false;
     private boolean lockAfterUnlock = false;
+    private boolean skipAutoLock = false;
+    private boolean wantLockOnResume = false;
     private String pendingGate = null;
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -221,15 +224,27 @@ public class MainActivity extends FragmentActivity {
         if (isLockIntent(intent)) requestAppLock();
     }
 
+    void skipNextAutoLock() {
+        skipAutoLock = true;
+    }
+
+    static void skipNextAutoLock(Context ctx) {
+        if (ctx instanceof MainActivity) ((MainActivity) ctx).skipNextAutoLock();
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
+        if (!skipAutoLock && LockGateService.autoLock(this)) wantLockOnResume = true;
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         maintainPin();
+        if (wantLockOnResume && !skipAutoLock) requestAppLock();
+        wantLockOnResume = false;
+        skipAutoLock = false;
         if (lockAfterUnlock && !keyguardLocked()) {
             lockAfterUnlock = false;
             requestAppLock();
@@ -376,6 +391,7 @@ public class MainActivity extends FragmentActivity {
                         stopVpn();
                         return;
                     }
+                    skipNextAutoLock();
                     Intent prep = VpnService.prepare(MainActivity.this);
                     if (prep != null) {
                         startActivityForResult(prep, VPN_REQ);
@@ -407,6 +423,11 @@ public class MainActivity extends FragmentActivity {
         }
 
         @JavascriptInterface
+        public void setAutoLock(boolean on) {
+            LockGateService.setAutoLock(MainActivity.this, on);
+        }
+
+        @JavascriptInterface
         public String ownerStatus() {
             return DeviceOwner.statusJson(MainActivity.this);
         }
@@ -414,7 +435,10 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public void requestAdmin() {
             runOnUiThread(
-                () -> startActivityForResult(DeviceOwner.adminAddIntent(MainActivity.this), ADMIN_REQ));
+                () -> {
+                    skipNextAutoLock();
+                    startActivityForResult(DeviceOwner.adminAddIntent(MainActivity.this), ADMIN_REQ);
+                });
         }
 
         @JavascriptInterface
@@ -476,6 +500,7 @@ public class MainActivity extends FragmentActivity {
 
         @JavascriptInterface
         public void startUpdate() {
+            skipNextAutoLock();
             AppUpdate.install(MainActivity.this, MainActivity.this::sendUpdate);
         }
 
@@ -498,6 +523,7 @@ public class MainActivity extends FragmentActivity {
         public void biometric() {
             runOnUiThread(
                 () -> {
+                    skipNextAutoLock();
                     int authenticators =
                         BiometricManager.Authenticators.BIOMETRIC_STRONG
                             | BiometricManager.Authenticators.BIOMETRIC_WEAK;

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { BgField, ScoreTone, StatusDot } from "./chrome";
 import { PinPad } from "./pin-pad";
 import { goHome, isAndroidApp } from "@/lib/android-lock";
-import { lastGeoLabel, requestWakeLock, verifyBiometric, vibrate } from "@/lib/native";
+import { lastGeoLabel, verifyBiometric, vibrate } from "@/lib/native";
 import { useScore, useSecurity } from "@/lib/security/store";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -45,15 +45,7 @@ export function LockScreen() {
 
   useEffect(() => {
     setGeo(lastGeoLabel());
-    if (!settings.alwaysOn) return;
-    let sent: WakeLockSentinel | null = null;
-    void requestWakeLock().then((s) => {
-      sent = s;
-    });
-    return () => {
-      void sent?.release();
-    };
-  }, [settings.alwaysOn]);
+  }, []);
 
   useEffect(() => {
     const nav = navigator as Navigator & {
@@ -257,8 +249,6 @@ export function LockScreen() {
           {killSwitch ? "Air gap · 0 KB/s" : `Live · ${linkKbps} KB/s`}
           {" · "}
           {lastScan ? `Scan ${timeAgo(lastScan)}` : "No scan yet"}
-          {" · "}
-          {settings.alwaysOn ? "Always on" : "Idle"}
           {settings.tamperProtection ? " · Tamper" : ""}
         </p>
         <div className="flex items-center gap-2 text-muted">
