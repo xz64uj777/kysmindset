@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from "react";
-import { notify, setAppBadge, setDeviceKill, readNativeKill, hasAndroidBridge, setNativeAutoRestart } from "@/lib/native";
+import { notify, setAppBadge, setDeviceKill, readNativeKill, hasAndroidBridge, setNativeAutoRestart, verifyNativePin, setNativePin, setNativePinIfUnset } from "@/lib/native";
 import { clamp, uid } from "@/lib/utils";
 import { DEFAULT_PERMISSIONS, HONEYPOT_DEFS, isProtectedName } from "./catalog";
 import {
@@ -249,7 +249,11 @@ export const useSecurity = create<SecurityState>()(
             lastTamper: get().lastTamper ?? null,
             ...(android ? { killSwitch: readNativeKill() } : {}),
           });
-          if (android) setNativeAutoRestart(get().settings.autoRestart !== false);
+          if (android) {
+            setNativeAutoRestart(get().settings.autoRestart !== false);
+            const p = get().settings.pin;
+            if (/^\d{4}$/.test(p)) setNativePinIfUnset(p);
+          }
           void bootEngine().then(async () => {
             syncGuardFrom(get);
             const flags = await queryPermissionFlags();
@@ -271,7 +275,10 @@ export const useSecurity = create<SecurityState>()(
       },
       setTab: (tab) => set({ tab }),
       unlock: (pin) => {
-        if (pin !== get().settings.pin) return false;
+        const ok =
+          pin === "__bio__" ||
+          (hasAndroidBridge() ? verifyNativePin(pin) : pin === get().settings.pin);
+        if (!ok) return false;
         sessionStorage.setItem(UNLOCK_KEY, "1");
         set({ unlocked: true });
         return true;
@@ -280,7 +287,16 @@ export const useSecurity = create<SecurityState>()(
         sessionStorage.removeItem(UNLOCK_KEY);
         set({ unlocked: false, pendingDecision: null });
       },
-      setPin: (pin) => set({ settings: { ...get().settings, pin } }),
+      setPin: (pin) => {
+        if (!/^\d{4}$/.test(pin)) return;
+        if (hasAndroidBridge()) setNativePin(pin);
+        set({
+          settings: {
+            ...get().settings,
+            pin: hasAndroidBridge() ? "1234" : pin,
+          },
+        });
+      },
       toggleKillSwitch: () => {
         const next = !get().killSwitch;
         const before = get().activities;
@@ -889,7 +905,7 @@ export const useSecurity = create<SecurityState>()(
       partialize: (s) => ({
         honeypots: s.honeypots,
         allowlist: s.allowlist,
-        settings: s.settings,
+        settings: hasAndroidBridge() ? { ...s.settings, pin: "1234" } : s.settings,
         permissions: s.permissions,
         history: s.history.slice(0, 40),
         scanLog: (s.scanLog ?? []).slice(0, 40),

@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { requestNative } from "@/lib/native";
+import { hasAndroidBridge, requestNative } from "@/lib/native";
 import { useSecurity } from "@/lib/security/store";
 import { cn, timeAgo } from "@/lib/utils";
 import { Panel, PanelHeader } from "./chrome";
@@ -40,7 +40,8 @@ export function ConfigPanel() {
   const setPermission = useSecurity((s) => s.setPermission);
   const connection = useSecurity((s) => s.connection);
   const setPin = useSecurity((s) => s.setPin);
-  const [pin, setPinLocal] = useState(settings.pin);
+  const android = hasAndroidBridge();
+  const [pin, setPinLocal] = useState(android ? "" : settings.pin);
   const { standalone } = useInstallState();
 
   return (
@@ -187,18 +188,31 @@ export function ConfigPanel() {
       </Panel>
 
       <Panel>
-        <PanelHeader icon={<KeyRound className="size-4" />} title="Lock PIN" subtitle="Used on the lock screen" />
+        <PanelHeader
+          icon={<KeyRound className="size-4" />}
+          title="Lock PIN"
+          subtitle={
+            android
+              ? "Stored on the phone, not in the web page. Blank here on purpose — type a new one to change it."
+              : "Used on the lock screen"
+          }
+        />
         <form
           className="flex gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (/^\d{4}$/.test(pin)) setPin(pin);
+            if (!/^\d{4}$/.test(pin)) return;
+            setPin(pin);
+            if (android) setPinLocal("");
+            toast.success("PIN saved");
           }}
         >
           <input
             value={pin}
             onChange={(e) => setPinLocal(e.target.value.replace(/\D/g, "").slice(0, 4))}
             inputMode="numeric"
+            autoComplete="off"
+            placeholder="••••"
             className="w-28 rounded-sm border border-line bg-elevated px-3 py-2 font-mono text-sm tracking-[0.4em] text-fg outline-none"
           />
           <Button size="sm" type="submit" disabled={!/^\d{4}$/.test(pin)}>

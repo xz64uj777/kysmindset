@@ -480,6 +480,21 @@ public class MainActivity extends FragmentActivity {
         }
 
         @JavascriptInterface
+        public boolean verifyPin(String pin) {
+            return PinStore.verify(MainActivity.this, pin);
+        }
+
+        @JavascriptInterface
+        public boolean setPin(String pin) {
+            return PinStore.set(MainActivity.this, pin);
+        }
+
+        @JavascriptInterface
+        public boolean setPinIfUnset(String pin) {
+            return PinStore.setIfUnset(MainActivity.this, pin);
+        }
+
+        @JavascriptInterface
         public void biometric() {
             runOnUiThread(
                 () -> {

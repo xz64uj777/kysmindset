@@ -90,6 +90,9 @@ type AndroidBridge = {
   setKill?: (v: boolean) => void;
   killActive?: () => boolean;
   setAutoRestart?: (v: boolean) => void;
+  verifyPin?: (pin: string) => boolean;
+  setPin?: (pin: string) => boolean;
+  setPinIfUnset?: (pin: string) => boolean;
   biometric?: () => void;
   listApps?: () => string;
   setAllowlist?: (json: string) => void;
@@ -137,6 +140,36 @@ export function setNativeAutoRestart(on: boolean) {
     a.setAutoRestart(on);
   } catch {
     /* ignore */
+  }
+}
+
+export function verifyNativePin(pin: string): boolean {
+  const a = androidBridge();
+  if (!a || typeof a.verifyPin !== "function") return false;
+  try {
+    return Boolean(a.verifyPin(pin));
+  } catch {
+    return false;
+  }
+}
+
+export function setNativePin(pin: string): boolean {
+  const a = androidBridge();
+  if (!a || typeof a.setPin !== "function") return false;
+  try {
+    return Boolean(a.setPin(pin));
+  } catch {
+    return false;
+  }
+}
+
+export function setNativePinIfUnset(pin: string): boolean {
+  const a = androidBridge();
+  if (!a || typeof a.setPinIfUnset !== "function") return false;
+  try {
+    return Boolean(a.setPinIfUnset(pin));
+  } catch {
+    return false;
   }
 }
 

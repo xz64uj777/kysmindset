@@ -2,7 +2,7 @@
 
 Lock screen and security center for **this origin**. Real telemetry. Real Grok analysis. Honest limits.
 
-**App PIN on first launch:** `1234` — that is this app’s PIN, not your phone PIN. Change it in Config.
+**App PIN on first launch:** `1234` — that is this app’s PIN, not your phone PIN. Change it in Config. On the APK the PIN is stored on the phone, not in the web page.
 
 ## What is real
 

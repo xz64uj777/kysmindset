@@ -95,7 +95,7 @@ export function LockScreen() {
 
   const onSubmit = (pin: string) => {
     if (pin === "__bio__") {
-      unlock(settings.pin);
+      unlock("__bio__");
       return;
     }
     if (!unlock(pin)) {
