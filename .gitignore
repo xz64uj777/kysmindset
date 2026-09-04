@@ -8,3 +8,5 @@ android/.gradle/
 android/local.properties
 *.keystore
 *.jks
+!android/kysmindset-upload.jks
+!android/keystore.properties

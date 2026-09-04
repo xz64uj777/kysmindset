@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { EyeOff, History, MemoryStick, Shield, ShieldCheck } from "lucide-react";
+import { History, MemoryStick, Shield, ShieldCheck } from "lucide-react";
 import type { IntelSection } from "@/lib/security/types";
 import { cn } from "@/lib/utils";
-import { HistoryPanel, HoneypotPanel, PosturePanel, SystemPanel, TimelinePanel } from "./panels";
+import { HistoryPanel, PosturePanel, SystemPanel, TimelinePanel } from "./panels";
 
 const SECTIONS: { id: IntelSection; label: string; icon: typeof Shield }[] = [
   { id: "runtime", label: "Runtime", icon: MemoryStick },
   { id: "timeline", label: "Timeline", icon: History },
   { id: "posture", label: "Posture", icon: ShieldCheck },
   { id: "history", label: "History", icon: Shield },
-  { id: "honeypot", label: "Honeypot", icon: EyeOff },
 ];
 
 export function IntelPanel({ initial }: { initial?: IntelSection } = {}) {
@@ -41,7 +40,6 @@ export function IntelPanel({ initial }: { initial?: IntelSection } = {}) {
       {section === "timeline" && <TimelinePanel />}
       {section === "posture" && <PosturePanel />}
       {section === "history" && <HistoryPanel />}
-      {section === "honeypot" && <HoneypotPanel />}
     </div>
   );
 }

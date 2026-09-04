@@ -1,7 +1,6 @@
-import { EyeOff, Lock, Shield, Siren, Wifi, WifiOff } from "lucide-react";
+import { Lock, Shield, Wifi, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BgField, ScoreTone, StatusDot } from "./chrome";
-import { SosDialog } from "./dialogs";
 import { PinPad } from "./pin-pad";
 import { goHome, isAndroidApp } from "@/lib/android-lock";
 import { lastGeoLabel, requestWakeLock, verifyBiometric, vibrate } from "@/lib/native";
@@ -25,14 +24,11 @@ export function LockScreen() {
   const lastScan = useSecurity((s) => s.lastScan);
   const linkKbps = useSecurity((s) => s.linkKbps);
   const droppedPackets = useSecurity((s) => s.droppedPackets);
-  const honeypots = useSecurity((s) => s.honeypots);
-  const intrusions = useSecurity((s) => s.intrusions);
   const score = useScore();
   const tone = ScoreTone(score.status);
   const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
-  const [sos, setSos] = useState(false);
   const [geo, setGeo] = useState<string | null>(null);
   const [battery, setBattery] = useState<number | null>(null);
   const [charging, setCharging] = useState(false);
@@ -124,9 +120,7 @@ export function LockScreen() {
 
   const threats = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
   const blocked = activities.filter((a) => a.status === "blocked" || a.status === "killed");
-  const armed = honeypots.filter((h) => h.armed).length;
   const notes = threats.slice(0, 2);
-  const latestCatch = intrusions[0];
   const linkLabel = connection.effectiveType === "UNKNOWN" ? "Link" : connection.effectiveType;
 
   return (
@@ -188,12 +182,11 @@ export function LockScreen() {
         </div>
 
         <div
-          className="lock-in mx-auto mt-3 grid w-full max-w-sm grid-cols-3 gap-1.5"
+          className="lock-in mx-auto mt-3 grid w-full max-w-sm grid-cols-2 gap-1.5"
           style={{ animationDelay: "180ms" }}
         >
           <MiniStat label="Alerts" value={threats.length} hot={threats.length > 0} />
           <MiniStat label="Blocked" value={blocked.length} />
-          <MiniStat label="Decoys" value={armed} />
         </div>
       </div>
 
@@ -202,8 +195,8 @@ export function LockScreen() {
           <LockCard
             delay={200}
             tone="red"
-            kicker="Kill switch"
-            title="Air gap armed"
+            kicker="Protection"
+            title="Air gap on"
             detail={`${droppedPackets.toLocaleString()} packets dropped · 0 KB/s`}
           />
         ) : null}
@@ -216,17 +209,7 @@ export function LockScreen() {
             detail="Unknown traffic and processes are blocked"
           />
         ) : null}
-        {latestCatch ? (
-          <LockCard
-            delay={240}
-            tone="cyan"
-            kicker="Honeypot"
-            title={latestCatch.honeypotName}
-            detail={`${latestCatch.source} · ${latestCatch.payload}`}
-            icon
-          />
-        ) : null}
-        {notes.length === 0 && !killSwitch && !lockdown && !latestCatch ? (
+        {notes.length === 0 && !killSwitch && !lockdown ? (
           <LockCard
             delay={200}
             tone="muted"
@@ -292,19 +275,7 @@ export function LockScreen() {
             Home
           </button>
         ) : null}
-        <button
-          type="button"
-          onClick={() => {
-            vibrate(20);
-            setSos(true);
-          }}
-          className="flex items-center gap-1.5 text-xs font-medium text-red/80 hover:text-red"
-        >
-          <Siren className="size-3.5" />
-          Emergency
-        </button>
       </div>
-      <SosDialog open={sos} onOpenChange={setSos} />
     </div>
   );
 }
@@ -324,14 +295,12 @@ function LockCard({
   kicker,
   title,
   detail,
-  icon,
 }: {
   delay: number;
   tone: "red" | "amber" | "cyan" | "muted";
   kicker: string;
   title: string;
   detail: string;
-  icon?: boolean;
 }) {
   const kickerClass =
     tone === "red"
@@ -355,7 +324,6 @@ function LockCard({
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className={cn("flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide", kickerClass)}>
-        {icon ? <EyeOff className="size-3" /> : null}
         {kicker}
       </div>
       <p className="mt-0.5 text-sm font-medium text-fg">{title}</p>

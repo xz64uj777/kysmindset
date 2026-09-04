@@ -72,15 +72,6 @@ function computeScore(
     score -= 15;
     factors.push({ label: "Tamper Protection disabled", deduction: 15 });
   }
-  const disarmed = (honeypots ?? []).filter((h) => !h.armed).length;
-  if (disarmed > 0) {
-    const d = disarmed * 3;
-    score -= d;
-    factors.push({
-      label: `${disarmed} disarmed decoy${disarmed > 1 ? "s" : ""}`,
-      deduction: d,
-    });
-  }
   if (!connection.secure) {
     score -= 20;
     factors.push({ label: "Insecure (HTTP) connection", deduction: 20 });
@@ -601,7 +592,7 @@ export const useSecurity = create<SecurityState>()(
             ),
           });
         };
-        push("AI engine online — starting posture scan", "info");
+        push("Starting scan", "info");
         await wait(280);
         get().liveTick();
         const snap = await snapshotPosture();
@@ -689,7 +680,6 @@ export const useSecurity = create<SecurityState>()(
             (a) => a.status === "suspicious" || a.status === "unknown",
           );
           const blocked = get().activities.filter((a) => a.status === "blocked").length;
-          const disarmed = get().honeypots.filter((h) => !h.armed);
           const vulns: DeepScanResult["vulnerabilities"] = [];
           const recs: DeepScanResult["recommendations"] = [];
           const strengths: string[] = [];
@@ -705,8 +695,6 @@ export const useSecurity = create<SecurityState>()(
               name: `${snap.thirdPartyHosts.length} third-party host${snap.thirdPartyHosts.length === 1 ? "" : "s"} in this session`,
               severity: snap.thirdPartyHosts.length > 3 ? "high" : "medium",
             });
-          if (disarmed.length)
-            vulns.push({ name: `${disarmed.length} disarmed decoys`, severity: "medium" });
           if (!get().settings.tamperProtection)
             vulns.push({ name: "Tamper Protection is off", severity: "high" });
           if (threats.length)
@@ -728,7 +716,7 @@ export const useSecurity = create<SecurityState>()(
                 s.score >= 85
                   ? "This origin is tight. Residual risk is third-party hosts and permissions."
                   : s.score >= 70
-                    ? "Fair posture. Block unknown hosts and keep decoys armed."
+                    ? "Fair posture. Block unknown hosts."
                     : "Elevated risk. Resolve unknown traffic and restore protection flags.",
               vulnerabilities: vulns,
               recommendations: recs,
@@ -934,7 +922,7 @@ export const useSecurity = create<SecurityState>()(
           lastTamper: p.lastTamper ?? null,
           activities: current.activities,
           honeypots: Array.isArray(p.honeypots) ? p.honeypots : current.honeypots,
-          settings: { ...current.settings, ...(p.settings ?? {}), deviceLock: false },
+          settings: { ...current.settings, ...(p.settings ?? {}) },
           connection: current.connection,
         };
       },

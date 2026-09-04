@@ -71,7 +71,6 @@ function List({
 
 export function OverviewPanel() {
   const activities = useSecurity((s) => s.activities);
-  const honeypots = useSecurity((s) => s.honeypots);
   const settings = useSecurity((s) => s.settings);
   const connection = useSecurity((s) => s.connection);
   const scanning = useSecurity((s) => s.scanning);
@@ -105,11 +104,6 @@ export function OverviewPanel() {
       name: "Transport",
       value: connection.secure ? 96 : 40,
       desc: connection.secure ? "HTTPS" : "HTTP — session can be read",
-    },
-    {
-      name: "Decoy Grid",
-      value: Math.round((honeypots.filter((h) => h.armed).length / Math.max(1, honeypots.length)) * 100),
-      desc: `${honeypots.filter((h) => h.armed).length}/${honeypots.length} traps armed`,
     },
   ];
 
@@ -172,7 +166,7 @@ export function OverviewPanel() {
         />
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => void runAiScan()} disabled={scanning}>
-            {scanning ? "Scanning..." : "Run AI Scan"}
+            {scanning ? "Scanning..." : "Run scan"}
           </Button>
           {lastScan ? (
             <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span>
@@ -186,7 +180,7 @@ export function OverviewPanel() {
           <MiniStat label="Threats neutralized" value={blocked.length} />
         </div>
         <p className="mt-3 text-micro text-muted">
-          Always On {settings.alwaysOn ? "enabled" : "off"} · {honeypots.filter((h) => h.armed).length} decoys armed ·{" "}
+          Always On {settings.alwaysOn ? "enabled" : "off"} ·{" "}
           {connection.secure ? "Secure" : "Insecure"} link
           {killSwitch ? " · Air gap armed" : ""}
         </p>
@@ -853,12 +847,6 @@ export function ConfigPanel() {
             desc="Lock when you leave the installed app (home-screen mode)"
             checked={settings.autoLock !== false}
             onChange={(v) => patch({ autoLock: v })}
-          />
-          <ToggleRow
-            title="Slack Alerts"
-            desc="Send threat alerts to Slack"
-            checked={settings.slackAlerts}
-            onChange={(v) => patch({ slackAlerts: v })}
           />
         </div>
         <div className="mt-4">

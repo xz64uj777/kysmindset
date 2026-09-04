@@ -10,14 +10,14 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Toaster, toast } from "sonner";
 import type { IntelSection, TabId } from "@/lib/security/types";
 import { useSecurity } from "@/lib/security/store";
 import { isStandalone, requestWakeLock, setAppBadge } from "@/lib/native";
 import { cn, timeAgo } from "@/lib/utils";
 import { BgField, StatusDot } from "./chrome";
-import { DecisionDialog, SosDialog } from "./dialogs";
+import { DecisionDialog } from "./dialogs";
 import { InstallBar } from "./install-bar";
 import { NetworkPanel } from "./network-panel";
 import { ActionLegend } from "./activity-row";
@@ -37,7 +37,6 @@ const SYSTEM_FROM: Partial<Record<TabId, IntelSection>> = {
   timeline: "timeline",
   posture: "posture",
   history: "history",
-  honeypot: "honeypot",
 };
 
 export function Dashboard() {
@@ -56,7 +55,6 @@ export function Dashboard() {
   const liveTick = useSecurity((s) => s.liveTick);
   const settings = useSecurity((s) => s.settings);
   const runAiScan = useSecurity((s) => s.runAiScan);
-  const [sos, setSos] = useState(false);
 
   const threats = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
 
@@ -100,7 +98,6 @@ export function Dashboard() {
       <BgField />
       <Toaster theme="dark" position="top-center" />
       <DecisionDialog />
-      <SosDialog open={sos} onOpenChange={setSos} />
       <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 pt-safe pb-safe">
         <header className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -222,9 +219,9 @@ export function Dashboard() {
             <div className="flex min-w-0 items-start gap-2">
               <WifiOff className="mt-0.5 size-4 shrink-0 text-red" />
               <div>
-                <p className="text-sm font-semibold text-red">Kill switch armed — air gap</p>
+                <p className="text-sm font-semibold text-red">Protection on — air gap</p>
                 <p className="text-xs text-red/80">
-                  All third-party fetches from this app are failed. {droppedPackets.toLocaleString()} requests dropped · 0 KB/s
+                  Other apps lose internet except the ones you allow in Config. {droppedPackets.toLocaleString()} app requests dropped · 0 KB/s
                 </p>
               </div>
             </div>
@@ -232,7 +229,7 @@ export function Dashboard() {
               type="button"
               onClick={() => {
                 toggleKillSwitch();
-                toast.success("Kill switch released — third-party fetches allowed.");
+                toast.success("Protection off.");
               }}
               className="shrink-0 rounded-md border border-red/40 bg-elevated px-3 py-1.5 text-xs font-medium text-fg hover:bg-white/10"
             >
@@ -246,9 +243,6 @@ export function Dashboard() {
             <p className="text-xs text-amber">
               DEVICE LOCKDOWN — All unknown activity is blocked. Resolve threats to return to normal.
             </p>
-            <button type="button" onClick={() => setSos(true)} className="shrink-0 text-xs font-medium text-red">
-              SOS Alert
-            </button>
           </div>
         ) : null}
 

@@ -31,7 +31,7 @@ export const LEGACY_TABS: Record<string, TabId> = {
   history: "system",
 };
 
-export type IntelSection = "runtime" | "timeline" | "posture" | "history" | "honeypot";
+export type IntelSection = "runtime" | "timeline" | "posture" | "history";
 
 export interface SecurityActivity {
   id: string;

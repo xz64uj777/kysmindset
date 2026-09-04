@@ -80,12 +80,12 @@ export function NetworkPanel() {
         </div>
         {killSwitch ? (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red/20 bg-red-dim px-3 py-2">
-            <p className="text-xs text-red">Kill switch armed — new sessions are RST.</p>
+            <p className="text-xs text-red">Protection on — new sessions are dropped.</p>
             <button
               type="button"
               onClick={() => {
                 toggleKillSwitch();
-                toast.success("Kill switch released — third-party fetches allowed.");
+                toast.success("Protection off.");
               }}
               className="shrink-0 text-xs font-medium text-fg underline-offset-2 hover:underline"
             >
@@ -133,7 +133,7 @@ export function NetworkPanel() {
           items={items}
           empty={
             killSwitch
-              ? "Kill switch is armed — third-party fetches from this app are failed."
+              ? "Protection is on."
               : "No sockets from this app yet. Hosts this page talks to show up here."
           }
         />

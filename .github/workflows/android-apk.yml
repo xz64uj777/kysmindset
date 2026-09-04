@@ -72,8 +72,8 @@ jobs:
           body: |
             **Kysmindset 2** (versionCode ${{ github.run_number }})
 
-            Installs next to the original. Do not use Update inside the old app.
-            Download this APK, open it from Files, allow the install.
+            Signed with the stable sideload key. After this key is on the phone,
+            later APKs can install over it (no uninstall).
 
             PIN 1234. Play Protect may warn — Install anyway.
 

@@ -58,8 +58,8 @@ export function AppUpdatePanel() {
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-muted">
-            Checks the apk-latest release. Android may ask to allow installs from Kysmindset the
-            first time. Play Protect can warn on this debug build — that is expected.
+            Checks GitHub for a newer APK signed with the same key, so it can install over this one.
+            Play Protect may still warn — that is expected.
           </p>
           {state === "download" ? (
             <div className="h-1.5 overflow-hidden rounded-full bg-elevated">

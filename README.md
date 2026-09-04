@@ -29,10 +29,12 @@ Lock screen and security center for **this origin**. Real telemetry. Real Grok a
 Install a **2.1.1+** APK. 2.0.x could overlay the keyguard and trap the phone — that is fixed.
 
 1. Open [Releases](https://github.com/xz64uj777/kysmindset/releases)
-2. Install `app-debug.apk`
-3. Open Kysmindset → Config → **Enable Device Admin** if you want Lock phone now
-4. Kill asks for Android VPN if you want other apps offline
+2. Install `Kysmindset-2.apk`
+3. Open Kysmindset 2 → Config → **Enable Device Admin** if you want Lock phone now
+4. Overview → **Start Protection** asks for Android VPN if you want other apps offline
 
-If an older build already trapped the phone: boot **Safe Mode** (hold Power → long-press Reboot), uninstall Kysmindset, or Settings → Security → Device admin apps → turn it off.
+Builds after the fixed signing key can install **over** the previous one. The first APK with that key still needs an uninstall of older debug-signed builds.
 
-2.1.1 hygiene: backup off, cleartext off, WebView locked to bundled assets, debug keystore no longer in the repo. A new APK may not install *over* an old one — uninstall the old app first, then install. Device Owner must be enrolled again after that.
+If an older build already trapped the phone: boot **Safe Mode** (hold Power → long-press Reboot), uninstall Kysmindset 2, or Settings → Security → Device admin apps → turn it off.
+
+Signing: every GitHub APK uses the same personal sideload key in `android/kysmindset-upload.jks` so updates do not wipe the app. This is not a Play Store key. Do not install Kysmindset APKs from anywhere except this repo.

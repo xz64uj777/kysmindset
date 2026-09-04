@@ -97,12 +97,6 @@ export function ConfigPanel() {
             checked={settings.deviceLock === true}
             onChange={(v) => patch({ deviceLock: v })}
           />
-          <ToggleRow
-            title="Slack Alerts"
-            desc="Send threat alerts to Slack"
-            checked={settings.slackAlerts}
-            onChange={(v) => patch({ slackAlerts: v })}
-          />
         </div>
         <div className="mt-4">
           <div className="mb-1 text-sm font-medium text-fg">Scheduled Auto-Scan</div>

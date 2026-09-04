@@ -12,7 +12,6 @@ import { GroupedActivityList } from "./grouped-list";
 
 export function OverviewPanel() {
   const activities = useSecurity((s) => s.activities);
-  const honeypots = useSecurity((s) => s.honeypots);
   const settings = useSecurity((s) => s.settings);
   const connection = useSecurity((s) => s.connection);
   const scanning = useSecurity((s) => s.scanning);
@@ -59,19 +58,13 @@ export function OverviewPanel() {
       value: connection.secure ? 96 : 40,
       desc: connection.secure ? "HTTPS" : "HTTP — session can be read",
     },
-    {
-      name: "Decoy Grid",
-      value: Math.round((honeypots.filter((h) => h.armed).length / Math.max(1, honeypots.length)) * 100),
-      desc: `${honeypots.filter((h) => h.armed).length}/${honeypots.length} traps armed`,
-    },
   ];
 
   const copySnapshot = async () => {
     const text = [
       `Kysmindset ${score.grade} ${score.score} · ${score.label}`,
       `Link ${connection.secure ? "HTTPS" : "HTTP"} · ${connection.effectiveType}`,
-      killSwitch ? "Kill switch armed" : "Kill switch idle",
-      `Decoys ${honeypots.filter((h) => h.armed).length}/${honeypots.length}`,
+      killSwitch ? "Protection on" : "Protection off",
       lastScan ? `Last scan ${new Date(lastScan).toISOString()}` : "No scan yet",
       score.factors.map((f) => `- ${f.label} (−${f.deduction})`).join("\n"),
     ]
@@ -136,12 +129,12 @@ export function OverviewPanel() {
         <PanelHeader icon={<Radar className="size-4" />} title="AI Security Engine" subtitle="Analyzes, learns & decides" />
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => void runAiScan()} disabled={scanning}>
-            {scanning ? "Scanning..." : "Run AI Scan"}
+            {scanning ? "Scanning..." : "Run scan"}
           </Button>
           {lastScan ? <span className="text-micro text-subtle">Last scan {timeAgo(lastScan)}</span> : null}
         </div>
         <p className="mt-3 text-micro text-muted">
-          Always On {settings.alwaysOn ? "on" : "off"} · {honeypots.filter((h) => h.armed).length} decoys ·{" "}
+          Always On {settings.alwaysOn ? "on" : "off"} ·{" "}
           {connection.secure ? "Secure" : "Insecure"} link
           {killSwitch ? " · Air gap" : ""} · {allowlist.length} trusted · {indicators.length} learned indicators
         </p>
