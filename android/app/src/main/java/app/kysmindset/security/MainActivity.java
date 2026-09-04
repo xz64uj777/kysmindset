@@ -50,17 +50,19 @@ public class MainActivity extends FragmentActivity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
-        try {
-            WebSettings.class
-                .getMethod("setAllowUniversalAccessFromFileURLs", boolean.class)
-                .invoke(s, true);
-        } catch (Exception ignored) {
-        }
+        s.setAllowFileAccess(false);
+        s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(false);
         web.setWebViewClient(
             new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest req) {
+                    android.net.Uri u = req.getUrl();
+                    if (u == null) return true;
+                    String href = u.toString();
+                    return !href.startsWith("file:///android_asset/");
+                }
+
                 @Override
                 public void onPageFinished(WebView view, String url) {
                     pageReady = true;
@@ -137,8 +139,6 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void applyLockWindow(boolean locked) {
-        // In-app PIN only. Never overlay keyguard. Never unpin here —
-        // hydrate used to call setGate(false) and that killed screen pin.
         clearOverlayFlags();
         if (!locked) return;
     }
@@ -158,8 +158,6 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void leaveToHome() {
-        // While pinned, Back/Home must not dump you to the launcher.
-        // Unpin is Recents + Back (system), or turn the pin toggle off.
         if (DeviceOwner.pinOnLock(this) && inLockTask()) return;
         lockAfterUnlock = false;
         clearOverlayFlags();
@@ -212,7 +210,6 @@ public class MainActivity extends FragmentActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Do not re-lock or re-pin here. That loop made PIN + fingerprint unreachable.
     }
 
     @Override
