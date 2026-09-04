@@ -94,7 +94,7 @@ export function Dashboard() {
               <ShieldCheck className="size-5 text-cyan" />
             </div>
             <div>
-              <h1 className="text-base font-semibold">Security Center</h1>
+              <h1 className="text-base font-semibold">Kysmindset 2</h1>
               <div className="flex items-center gap-2 text-2xs text-subtle">
                 {killSwitch ? (
                   <span className="flex items-center gap-1 font-medium text-red">

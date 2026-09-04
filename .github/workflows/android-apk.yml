@@ -32,7 +32,7 @@ jobs:
         run: |
           VC=${{ github.run_number }}
           sed -i "s/versionCode [0-9]*/versionCode ${VC}/" android/app/build.gradle
-          sed -i "s/versionName \"[^\"]*\"/versionName \"2.1.${VC}\"/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"2.2.${VC}\"/" android/app/build.gradle
           grep version android/app/build.gradle
 
       - uses: actions/setup-java@v4
@@ -72,9 +72,10 @@ jobs:
           body: |
             **Kysmindset 2** (versionCode: ${{ github.run_number }})
 
-            Signed with the stable sideload key. After this key is on the phone,
-            later APKs can install over it (no uninstall). In-app Update checks
-            that the APK is the same app and the same key.
+            Its own app. Original Kysmindset can stay installed next to it.
+
+            Signed with the stable sideload key. Later APKs install over this one.
+            In-app Update checks that the APK is the same app and the same key.
 
             PIN 1234. Play Protect may warn — Install anyway.
 

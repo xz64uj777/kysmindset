@@ -135,7 +135,7 @@ public final class AppUpdate {
                             sink.emit(
                                 err(
                                     "need-permission",
-                                    "Allow installs from Kysmindset, then tap Update again"));
+                                    "Allow installs from Kysmindset 2, then tap Update again"));
                             return;
                         }
                         if (!installSession(ctx, apk)) installView(ctx, apk);

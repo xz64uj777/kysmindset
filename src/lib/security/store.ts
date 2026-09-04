@@ -204,7 +204,7 @@ export const useSecurity = create<SecurityState>()(
       intrusions: [],
       indicators: [],
       allowlist: [
-        { id: "al-ui", name: "Kysmindset", type: "process" },
+        { id: "al-ui", name: "Kysmindset 2", type: "process" },
         { id: "al-sw", name: "Service Worker", type: "process" },
       ],
       settings: {

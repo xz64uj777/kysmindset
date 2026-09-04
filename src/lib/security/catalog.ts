@@ -28,7 +28,7 @@ export const TRACKER_HOSTS = [
   "adsystem.com",
 ];
 
-export const PROTECTED_NAMES = ["Kysmindset", "Service Worker", "Device runtime"];
+export const PROTECTED_NAMES = ["Kysmindset 2", "Kysmindset", "Service Worker", "Device runtime"];
 
 export function isProtectedName(name: string) {
   return PROTECTED_NAMES.some((n) => n.toLowerCase() === name.toLowerCase());

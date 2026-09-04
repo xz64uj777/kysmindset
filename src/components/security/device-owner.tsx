@@ -68,7 +68,7 @@ export function DeviceOwnerPanel() {
           <p className="text-xs text-muted">
             Device Admin is the path almost everyone can use. Android shows one system screen.
             Lock phone now uses your system PIN first — this app cannot replace the Android lock
-            screen. After you unlock the phone, Kysmindset comes back to its own PIN.
+            screen. After you unlock the phone, Kysmindset 2 comes back to its own PIN.
           </p>
           <p className="text-xs text-muted">
             Home and Back always leave. Pinning is optional and uses Android’s own pin dialog.
@@ -77,7 +77,7 @@ export function DeviceOwnerPanel() {
             size="sm"
             onClick={() => {
               requestAndroidAdmin();
-              toast.message("Allow Kysmindset as device admin on the next screen.");
+              toast.message("Allow Kysmindset 2 as device admin on the next screen.");
             }}
           >
             Enable device admin
@@ -167,12 +167,12 @@ function OwnerControls({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted">
-        This phone treats Kysmindset as the device policy controller. Home, Recents, and the
+        This phone treats Kysmindset 2 as the device policy controller. Home, Recents, and the
         system keyguard stay available unless you opt into pinning.
       </p>
       <ToggleRow
         title="Replace system keyguard"
-        desc="Turns the Android lock screen off so only the Kysmindset PIN is shown. Fails if the phone still has its own PIN or pattern."
+        desc="Turns the Android lock screen off so only the Kysmindset 2 PIN is shown. Fails if the phone still has its own PIN or pattern."
         checked={Boolean(st.replaceKeyguard)}
         onChange={(v) => {
           const next = applyAndroidOwner(v);
@@ -182,7 +182,7 @@ function OwnerControls({
               "Android kept its keyguard. Remove the phone PIN/pattern, then toggle this again.",
             );
           } else {
-            toast.success(v ? "Kysmindset will own the lock." : "System keyguard restored.");
+            toast.success(v ? "Kysmindset 2 will own the lock." : "System keyguard restored.");
           }
         }}
       />
