@@ -88,9 +88,11 @@ export function setAppBadge(count: number) {
 
 type AndroidBridge = {
   setKill?: (v: boolean) => void;
+  killActive?: () => boolean;
   biometric?: () => void;
   listApps?: () => string;
   setAllowlist?: (json: string) => void;
+  getAllowlist?: () => string;
   requestStorage?: () => void;
 };
 
@@ -120,6 +122,28 @@ export function setVpnAllowlist(pkgs: string[]) {
     a.setAllowlist(JSON.stringify(pkgs));
   } catch {
     /* ignore */
+  }
+}
+
+export function readNativeKill(): boolean {
+  const a = androidBridge();
+  if (!a || typeof a.killActive !== "function") return false;
+  try {
+    return Boolean(a.killActive());
+  } catch {
+    return false;
+  }
+}
+
+export function readNativeAllowlist(): string[] {
+  const a = androidBridge();
+  if (!a?.getAllowlist) return [];
+  try {
+    const parsed = JSON.parse(a.getAllowlist()) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  } catch {
+    return [];
   }
 }
 

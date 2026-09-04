@@ -16,6 +16,7 @@ import {
   type OwnerStatus,
 } from "@/lib/android-lock";
 import { useSecurity } from "@/lib/security/store";
+import { Panel, PanelHeader } from "./chrome";
 
 export function DeviceOwnerPanel() {
   const android = isAndroidApp();

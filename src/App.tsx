@@ -69,6 +69,13 @@ class BootError extends Component<{ children: ReactNode }, { err: string | null 
         <button
           type="button"
           className="rounded-md border border-line bg-elevated px-3 py-2 text-sm text-fg"
+          onClick={() => window.location.reload()}
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          className="text-xs text-muted underline-offset-2 hover:text-fg hover:underline"
           onClick={() => {
             try {
               const keys: string[] = [];
@@ -84,7 +91,7 @@ class BootError extends Component<{ children: ReactNode }, { err: string | null 
             window.location.reload();
           }}
         >
-          Reset and reload
+          Wipe saved data and reload
         </button>
       </div>
     );

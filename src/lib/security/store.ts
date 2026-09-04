@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from "react";
-import { notify, setAppBadge, setDeviceKill } from "@/lib/native";
+import { notify, setAppBadge, setDeviceKill, readNativeKill } from "@/lib/native";
 import { clamp, uid } from "@/lib/utils";
 import { DEFAULT_PERMISSIONS, HONEYPOT_DEFS, isProtectedName } from "./catalog";
 import {
@@ -256,6 +256,7 @@ export const useSecurity = create<SecurityState>()(
             connection: readConnection(),
             tamperLog: get().tamperLog ?? [],
             lastTamper: get().lastTamper ?? null,
+            ...(readNativeKill() ? { killSwitch: true } : {}),
           });
           void bootEngine().then(async () => {
             syncGuardFrom(get);

@@ -1,4 +1,4 @@
-import { listDeviceApps, setVpnAllowlist, type DeviceApp } from "./native";
+import { listDeviceApps, readNativeAllowlist, setVpnAllowlist, type DeviceApp } from "./native";
 
 const VPN_ALLOW_KEY = "kysmindset-vpn-allow";
 
@@ -29,10 +29,17 @@ export function loadVpnAllow(): DeviceApp[] {
   try {
     const raw = localStorage.getItem(VPN_ALLOW_KEY);
     const parsed = raw ? (JSON.parse(raw) as DeviceApp[]) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (Array.isArray(parsed) && parsed.length) return parsed;
   } catch {
-    return [];
+    /* fall through to native */
   }
+  const pkgs = readNativeAllowlist();
+  if (!pkgs.length) return [];
+  const installed = listDeviceApps();
+  return pkgs.map((pkg) => ({
+    pkg,
+    name: installed.find((a) => a.pkg === pkg)?.name ?? pkg,
+  }));
 }
 
 export function saveVpnAllow(list: DeviceApp[]) {

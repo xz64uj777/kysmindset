@@ -345,6 +345,25 @@ public class MainActivity extends FragmentActivity {
         }
 
         @JavascriptInterface
+        public String getAllowlist() {
+            SharedPreferences prefs = getSharedPreferences(KillVpnService.PREFS, MODE_PRIVATE);
+            String raw = prefs.getString(KillVpnService.KEY_ALLOW, "");
+            JSONArray arr = new JSONArray();
+            if (raw != null) {
+                for (String pkg : raw.split("\n")) {
+                    String p = pkg.trim();
+                    if (!p.isEmpty()) arr.put(p);
+                }
+            }
+            return arr.toString();
+        }
+
+        @JavascriptInterface
+        public boolean killActive() {
+            return KillVpnService.active;
+        }
+
+        @JavascriptInterface
         public void setKill(boolean on) {
             runOnUiThread(
                 () -> {
