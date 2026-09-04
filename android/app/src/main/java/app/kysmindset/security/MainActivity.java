@@ -13,9 +13,12 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.webkit.WebViewAssetLoader;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
 
@@ -53,14 +56,29 @@ public class MainActivity extends FragmentActivity {
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(false);
         s.setMediaPlaybackRequiresUserGesture(false);
+        final WebViewAssetLoader assets =
+            new WebViewAssetLoader.Builder()
+                .setDomain("appassets.androidplatform.net")
+                .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                .build();
         web.setWebViewClient(
             new WebViewClient() {
                 @Override
-                public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest req) {
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
+                    return assets.shouldInterceptRequest(req.getUrl());
+                }
+
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                     android.net.Uri u = req.getUrl();
                     if (u == null) return true;
-                    String href = u.toString();
-                    return !href.startsWith("file:///android_asset/");
+                    String host = u.getHost() == null ? "" : u.getHost();
+                    String scheme = u.getScheme() == null ? "" : u.getScheme();
+                    if ("appassets.androidplatform.net".equals(host)) return false;
+                    if ("https".equals(scheme) && (host.endsWith("googleapis.com") || host.endsWith("gstatic.com"))) {
+                        return false;
+                    }
+                    return true;
                 }
 
                 @Override
@@ -70,7 +88,7 @@ public class MainActivity extends FragmentActivity {
                 }
             });
         web.addJavascriptInterface(new KysBridge(), "KysAndroid");
-        web.loadUrl("file:///android_asset/www/index.html");
+        web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html");
         if (isLockIntent(getIntent())) requestAppLock();
         if (LockGateService.deviceLockOn(this) && DeviceOwner.isAdmin(this)) {
             startLockGate();
@@ -119,10 +137,6 @@ public class MainActivity extends FragmentActivity {
         }
     }
 
-    /**
-     * Keep overlay flags off. If the user opted into screen pin, stay pinned
-     * (re-enter after the system lock screen). Otherwise drop lock-task.
-     */
     private void maintainPin() {
         clearOverlayFlags();
         if (DeviceOwner.pinOnLock(this)) {
