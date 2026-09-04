@@ -364,6 +364,11 @@ public class MainActivity extends FragmentActivity {
         }
 
         @JavascriptInterface
+        public void setAutoRestart(boolean on) {
+            KillVpnService.setAutoRestart(MainActivity.this, on);
+        }
+
+        @JavascriptInterface
         public void setKill(boolean on) {
             runOnUiThread(
                 () -> {

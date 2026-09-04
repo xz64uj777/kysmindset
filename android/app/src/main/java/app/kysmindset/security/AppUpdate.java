@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -77,6 +78,15 @@ public final class AppUpdate {
                         int local = localCode(ctx);
                         String url = apkUrl(rel);
                         JSONObject o = new JSONObject();
+                        if (remote <= 0) {
+                            o.put("state", "check-fail");
+                            o.put("error", "Could not read the GitHub version");
+                            o.put("local", local);
+                            o.put("name", localName(ctx));
+                            o.put("url", url);
+                            sink.emit(o.toString());
+                            return;
+                        }
                         o.put("state", remote > local ? "available" : "current");
                         o.put("local", local);
                         o.put("remote", remote);
@@ -104,15 +114,27 @@ public final class AppUpdate {
                             sink.emit(err("bad-apk", "Download was empty"));
                             return;
                         }
+                        String bad = verifyApk(ctx, apk);
+                        if (bad != null) {
+                            //noinspection ResultOfMethodCallIgnored
+                            apk.delete();
+                            sink.emit(err("bad-apk", bad));
+                            return;
+                        }
                         sink.emit(progress("install", 100));
-                        if (Build.VERSION.SDK_INT >= 26
+                        boolean owner = DeviceOwner.isOwner(ctx);
+                        if (!owner
+                            && Build.VERSION.SDK_INT >= 26
                             && !ctx.getPackageManager().canRequestPackageInstalls()) {
                             Intent perm =
                                 new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                             perm.setData(Uri.parse("package:" + ctx.getPackageName()));
                             perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                             ctx.startActivity(perm);
-                            sink.emit(err("need-permission", "Allow installs from Kysmindset, then tap Update again"));
+                            sink.emit(
+                                err(
+                                    "need-permission",
+                                    "Allow installs from Kysmindset, then tap Update again"));
                             return;
                         }
                         if (!installSession(ctx, apk)) installView(ctx, apk);
@@ -122,6 +144,94 @@ public final class AppUpdate {
                     }
                 })
             .start();
+    }
+
+    /** Null if the APK is this app, signed with the same key. Otherwise a message. */
+    static String verifyApk(Context ctx, File apk) {
+        PackageManager pm = ctx.getPackageManager();
+        PackageInfo incoming = archiveInfo(pm, apk);
+        if (incoming == null || incoming.packageName == null) {
+            return "Download is not a valid APK";
+        }
+        if (!ctx.getPackageName().equals(incoming.packageName)) {
+            return "APK is a different app";
+        }
+        Signature[] mine;
+        Signature[] theirs;
+        try {
+            mine = signers(installedInfo(ctx, pm));
+            theirs = signers(incoming);
+        } catch (Exception e) {
+            return "Could not read signing key";
+        }
+        if (mine.length == 0 || theirs.length == 0) {
+            return "Could not read signing key";
+        }
+        if (!sameSigner(mine, theirs)) {
+            return "APK is not signed with this app's key";
+        }
+        return null;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PackageInfo installedInfo(Context ctx, PackageManager pm) throws Exception {
+        String pkg = ctx.getPackageName();
+        if (Build.VERSION.SDK_INT >= 33) {
+            return pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(sigFlags()));
+        }
+        return pm.getPackageInfo(pkg, sigFlags());
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PackageInfo archiveInfo(PackageManager pm, File apk) {
+        String path = apk.getAbsolutePath();
+        PackageInfo pi = archive(pm, path, sigFlags());
+        if (pi == null || signers(pi).length == 0) {
+            pi = archive(pm, path, PackageManager.GET_SIGNATURES);
+        }
+        return pi;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static PackageInfo archive(PackageManager pm, String path, int flags) {
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                return pm.getPackageArchiveInfo(path, PackageManager.PackageInfoFlags.of(flags));
+            }
+            return pm.getPackageArchiveInfo(path, flags);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int sigFlags() {
+        if (Build.VERSION.SDK_INT >= 28) return PackageManager.GET_SIGNING_CERTIFICATES;
+        return PackageManager.GET_SIGNATURES;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Signature[] signers(PackageInfo info) {
+        if (info == null) return new Signature[0];
+        if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
+            if (info.signingInfo.hasMultipleSigners()) {
+                Signature[] s = info.signingInfo.getApkContentsSigners();
+                return s != null ? s : new Signature[0];
+            }
+            Signature[] s = info.signingInfo.getSigningCertificateHistory();
+            return s != null ? s : new Signature[0];
+        }
+        return info.signatures != null ? info.signatures : new Signature[0];
+    }
+
+    private static boolean sameSigner(Signature[] a, Signature[] b) {
+        java.util.HashSet<Signature> set = new java.util.HashSet<>();
+        for (Signature s : a) {
+            if (s != null) set.add(s);
+        }
+        for (Signature s : b) {
+            if (s != null && set.contains(s)) return true;
+        }
+        return false;
     }
 
     private static boolean installSession(Context ctx, File apk) {
@@ -223,30 +333,31 @@ public final class AppUpdate {
     }
 
     private static byte[] readAll(InputStream in) throws Exception {
-        File tmp = null;
-        try {
-            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-            byte[] buf = new byte[4096];
-            int n;
-            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
-            return bos.toByteArray();
-        } finally {
-            if (tmp != null) {
-                /* unused */
-            }
-        }
+        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[4096];
+        int n;
+        while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+        return bos.toByteArray();
     }
 
     private static int parseRemoteCode(JSONObject rel) {
         String body = rel.optString("body", "");
-        Matcher m = Pattern.compile("versionCode\\s*:\\s*(\\\\d+)").matcher(body);
-        if (m.find()) {
-            try {
-                return Integer.parseInt(m.group(1));
-            } catch (Exception ignored) {
-            }
+        String name = rel.optString("name", "");
+        String tag = rel.optString("tag_name", "");
+        int n = firstInt(body, "versionCode\\s*:?\\s*(\\d+)");
+        if (n > 0) return n;
+        return firstInt(name + " " + tag + " " + body, "2\\.1\\.(\\d+)");
+    }
+
+    private static int firstInt(String text, String regex) {
+        if (text == null || text.isEmpty()) return 0;
+        Matcher m = Pattern.compile(regex).matcher(text);
+        if (!m.find()) return 0;
+        try {
+            return Integer.parseInt(m.group(1));
+        } catch (Exception e) {
+            return 0;
         }
-        return 0;
     }
 
     private static String apkUrl(JSONObject rel) {

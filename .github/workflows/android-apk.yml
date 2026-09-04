@@ -70,14 +70,16 @@ jobs:
           tag_name: apk-latest
           name: Kysmindset 2 APK
           body: |
-            **Kysmindset 2** (versionCode ${{ github.run_number }})
+            **Kysmindset 2** (versionCode: ${{ github.run_number }})
 
             Signed with the stable sideload key. After this key is on the phone,
-            later APKs can install over it (no uninstall).
+            later APKs can install over it (no uninstall). In-app Update checks
+            that the APK is the same app and the same key.
 
             PIN 1234. Play Protect may warn — Install anyway.
 
             Lock phone now: Android lock first, then this app’s PIN.
+            Start Protection comes back after reboot if Auto Restart is on.
           files: |
             android/app/build/outputs/apk/debug/Kysmindset-2.apk
             android/app/build/outputs/apk/debug/app-debug.apk

@@ -68,7 +68,7 @@ export function ConfigPanel() {
           />
           <ToggleRow
             title="Auto Restart"
-            desc="Automatically restarts the security system if it crashes or is killed."
+            desc="Brings Protection back after a reboot or if Android kills it."
             checked={settings.autoRestart}
             onChange={(v) => patch({ autoRestart: v })}
           />

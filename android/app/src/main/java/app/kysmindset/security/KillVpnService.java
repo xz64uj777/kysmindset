@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.VpnService;
@@ -17,15 +18,38 @@ public class KillVpnService extends VpnService {
     public static final String ACTION_RESTART = "app.kysmindset.security.RESTART_VPN";
     public static final String PREFS = "kys";
     public static final String KEY_ALLOW = "vpn_allow";
+    public static final String KEY_WANTED = "vpn_wanted";
+    public static final String KEY_AUTO = "auto_restart";
     private static final String CH = "kys-airgap";
     public static volatile boolean active;
     private ParcelFileDescriptor tun;
     private volatile boolean running;
 
+    public static boolean wanted(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WANTED, false);
+    }
+
+    public static void setWanted(Context ctx, boolean on) {
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_WANTED, on).apply();
+    }
+
+    public static boolean autoRestart(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_AUTO, true);
+    }
+
+    public static void setAutoRestart(Context ctx, boolean on) {
+        ctx.getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_AUTO, on).apply();
+    }
+
+    public static boolean shouldRestore(Context ctx) {
+        return wanted(ctx) && autoRestart(ctx);
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
         if (ACTION_STOP.equals(action)) {
+            setWanted(this, false);
             stopTunnel();
             stopSelf();
             return START_NOT_STICKY;
@@ -52,14 +76,14 @@ public class KillVpnService extends VpnService {
         int nAllow = allowCount();
         String text =
             nAllow == 0
-                ? "All apps blocked until Kill is released"
+                ? "Other apps blocked until Protection is stopped"
                 : nAllow + " app" + (nAllow == 1 ? "" : "s") + " allowed through";
         Notification.Builder b =
             Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CH)
                 : new Notification.Builder(this);
         Notification n =
-            b.setContentTitle("Kysmindset 2 air gap")
+            b.setContentTitle("Kysmindset 2 Protection")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pi)
@@ -88,7 +112,7 @@ public class KillVpnService extends VpnService {
     private void startTunnel() {
         if (tun != null) return;
         Builder b = new Builder();
-        b.setSession("Kysmindset 2 Air Gap");
+        b.setSession("Kysmindset 2 Protection");
         b.setMtu(1500);
         b.addAddress("10.8.0.2", 32);
         b.addRoute("0.0.0.0", 0);
@@ -118,6 +142,7 @@ public class KillVpnService extends VpnService {
         if (tun == null) return;
         running = true;
         active = true;
+        setWanted(this, true);
         Thread t =
             new Thread(
                 () -> {
@@ -153,6 +178,7 @@ public class KillVpnService extends VpnService {
 
     @Override
     public void onRevoke() {
+        setWanted(this, false);
         stopTunnel();
         stopSelf();
     }

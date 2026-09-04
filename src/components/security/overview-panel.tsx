@@ -26,8 +26,12 @@ export function OverviewPanel() {
   const [vpnAllowN, setVpnAllowN] = useState(() => loadVpnAllow().length);
   useEffect(() => {
     const sync = () => {
-      setDeviceVpn(readNativeKill());
+      const n = readNativeKill();
+      setDeviceVpn(n);
       setVpnAllowN(loadVpnAllow().length);
+      if (n && !useSecurity.getState().killSwitch) {
+        useSecurity.setState({ killSwitch: true });
+      }
     };
     sync();
     const id = window.setInterval(sync, 1500);

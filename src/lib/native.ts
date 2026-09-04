@@ -89,6 +89,7 @@ export function setAppBadge(count: number) {
 type AndroidBridge = {
   setKill?: (v: boolean) => void;
   killActive?: () => boolean;
+  setAutoRestart?: (v: boolean) => void;
   biometric?: () => void;
   listApps?: () => string;
   setAllowlist?: (json: string) => void;
@@ -120,6 +121,20 @@ export function setVpnAllowlist(pkgs: string[]) {
   if (!a?.setAllowlist) return;
   try {
     a.setAllowlist(JSON.stringify(pkgs));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hasAndroidBridge() {
+  return androidBridge() != null;
+}
+
+export function setNativeAutoRestart(on: boolean) {
+  const a = androidBridge();
+  if (!a || typeof a.setAutoRestart !== "function") return;
+  try {
+    a.setAutoRestart(on);
   } catch {
     /* ignore */
   }

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useMemo } from "react";
-import { notify, setAppBadge, setDeviceKill, readNativeKill } from "@/lib/native";
+import { notify, setAppBadge, setDeviceKill, readNativeKill, hasAndroidBridge, setNativeAutoRestart } from "@/lib/native";
 import { clamp, uid } from "@/lib/utils";
 import { DEFAULT_PERMISSIONS, HONEYPOT_DEFS, isProtectedName } from "./catalog";
 import {
@@ -241,14 +241,16 @@ export const useSecurity = create<SecurityState>()(
           const unlocked =
             typeof sessionStorage !== "undefined" &&
             sessionStorage.getItem(UNLOCK_KEY) === "1";
+          const android = hasAndroidBridge();
           set({
             hydrated: true,
             unlocked,
             connection: readConnection(),
             tamperLog: get().tamperLog ?? [],
             lastTamper: get().lastTamper ?? null,
-            ...(readNativeKill() ? { killSwitch: true } : {}),
+            ...(android ? { killSwitch: readNativeKill() } : {}),
           });
+          if (android) setNativeAutoRestart(get().settings.autoRestart !== false);
           void bootEngine().then(async () => {
             syncGuardFrom(get);
             const flags = await queryPermissionFlags();
@@ -725,7 +727,10 @@ export const useSecurity = create<SecurityState>()(
           });
         });
       },
-      patchSettings: (patch) => set({ settings: { ...get().settings, ...patch } }),
+      patchSettings: (patch) => {
+        set({ settings: { ...get().settings, ...patch } });
+        if (typeof patch.autoRestart === "boolean") setNativeAutoRestart(patch.autoRestart);
+      },
       setPermission: (id, granted) =>
         set({
           permissions: get().permissions.map((p) => (p.id === id ? { ...p, granted } : p)),

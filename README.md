@@ -33,7 +33,9 @@ Install a **2.1.1+** APK. 2.0.x could overlay the keyguard and trap the phone �
 3. Open Kysmindset 2 → Config → **Enable Device Admin** if you want Lock phone now
 4. Overview → **Start Protection** asks for Android VPN if you want other apps offline
 
-Builds after the fixed signing key can install **over** the previous one. The first APK with that key still needs an uninstall of older debug-signed builds.
+Builds after the fixed signing key can install **over** the previous one. Config → App update only installs an APK that is this app and this key. The first APK with that key still needs an uninstall of older debug-signed builds.
+
+If **Auto Restart** is on (default) and Protection was on, it comes back after a reboot or after an in-app update.
 
 If an older build already trapped the phone: boot **Safe Mode** (hold Power → long-press Reboot), uninstall Kysmindset 2, or Settings → Security → Device admin apps → turn it off.
 
