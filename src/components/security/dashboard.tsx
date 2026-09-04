@@ -136,15 +136,15 @@ export function Dashboard() {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              title="Network Kill Switch"
+              title={killSwitch ? "Stop Protection" : "Start Protection"}
               aria-pressed={killSwitch}
               onClick={() => {
                 const arming = !killSwitch;
                 toggleKillSwitch();
                 if (arming) {
-                  toast.error("Kill switch armed — third-party fetches from this app are blocked.");
+                  toast.message("Allow the VPN screen if Android shows it.");
                 } else {
-                  toast.success("Kill switch released — third-party fetches allowed.");
+                  toast.success("Protection off.");
                 }
               }}
               className={cn(
@@ -155,7 +155,8 @@ export function Dashboard() {
               )}
             >
               {killSwitch ? <WifiOff className="size-4" /> : <Wifi className="size-4" />}
-              <span>{killSwitch ? "Armed" : "Kill"}</span>
+              <span className="hidden min-[400px]:inline">{killSwitch ? "Stop Protection" : "Start Protection"}</span>
+              <span className="min-[400px]:hidden">{killSwitch ? "Stop" : "Start"}</span>
             </button>
             <button
               type="button"

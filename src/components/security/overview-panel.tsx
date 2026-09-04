@@ -1,9 +1,11 @@
 import { Activity, Radar, RefreshCw, ShieldAlert, ShieldCheck, Terminal, Trash2, Wifi, WifiOff } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { readNativeKill } from "@/lib/native";
 import { useScore, useSecurity } from "@/lib/security/store";
+import { loadVpnAllow } from "@/lib/vpn-allow";
 import { cn, timeAgo } from "@/lib/utils";
 import { Panel, PanelHeader, ScoreTone, StatusDot } from "./chrome";
 import { GroupedActivityList } from "./grouped-list";
@@ -20,6 +22,18 @@ export function OverviewPanel() {
   const allowlist = useSecurity((s) => s.allowlist);
   const scanLog = useSecurity((s) => s.scanLog);
   const killSwitch = useSecurity((s) => s.killSwitch);
+  const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
+  const [deviceVpn, setDeviceVpn] = useState(() => readNativeKill());
+  const [vpnAllowN, setVpnAllowN] = useState(() => loadVpnAllow().length);
+  useEffect(() => {
+    const sync = () => {
+      setDeviceVpn(readNativeKill());
+      setVpnAllowN(loadVpnAllow().length);
+    };
+    sync();
+    const id = window.setInterval(sync, 1500);
+    return () => window.clearInterval(id);
+  }, [killSwitch]);
   const score = useScore();
   const tone = ScoreTone(score.status);
   const threats = activities.filter((a) => a.status === "suspicious" || a.status === "unknown");
@@ -73,6 +87,51 @@ export function OverviewPanel() {
 
   return (
     <div className="space-y-4">
+      <Panel>
+        <PanelHeader
+          icon={<ShieldCheck className="size-4" />}
+          title="Protection"
+          subtitle="Cuts other apps’ internet. Apps you allow in Config still get through."
+        />
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-md border border-line bg-elevated p-3">
+            <div className="text-2xs uppercase tracking-wide text-subtle">Phone VPN</div>
+            <div className={cn("mt-1 text-sm font-semibold", deviceVpn ? "text-emerald" : "text-muted")}>
+              {deviceVpn ? "On" : "Off"}
+            </div>
+          </div>
+          <div className="rounded-md border border-line bg-elevated p-3">
+            <div className="text-2xs uppercase tracking-wide text-subtle">App guard</div>
+            <div className={cn("mt-1 text-sm font-semibold", killSwitch ? "text-emerald" : "text-muted")}>
+              {killSwitch ? "On" : "Off"}
+            </div>
+          </div>
+          <div className="rounded-md border border-line bg-elevated p-3">
+            <div className="text-2xs uppercase tracking-wide text-subtle">Do not block</div>
+            <div className="mt-1 text-sm font-semibold text-fg">
+              {vpnAllowN} app{vpnAllowN === 1 ? "" : "s"}
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              const arming = !killSwitch;
+              toggleKillSwitch();
+              if (arming) toast.message("Allow the VPN screen if Android shows it.");
+              else toast.success("Protection off.");
+            }}
+          >
+            {killSwitch ? "Stop Protection" : "Start Protection"}
+          </Button>
+          <span className="text-2xs text-subtle">
+            {killSwitch
+              ? "Protection is on. Android may show an air-gap VPN notification."
+              : "Turns on the phone VPN. Pick apps that should stay online in Config first if you want."}
+          </span>
+        </div>
+      </Panel>
       <Panel>
         <PanelHeader icon={<Radar className="size-4" />} title="AI Security Engine" subtitle="Analyzes, learns & decides" />
         <div className="flex flex-wrap items-center gap-2">
@@ -268,8 +327,8 @@ function QuickActions() {
   const actions = [
     {
       key: "kill",
-      label: killSwitch ? "Release Kill Switch" : "Arm Kill Switch",
-      desc: killSwitch ? "Restore dropped sessions" : "Cut inbound and outbound",
+      label: killSwitch ? "Stop Protection" : "Start Protection",
+      desc: killSwitch ? "Turn the VPN off" : "Cut other apps’ internet",
       color: killSwitch
         ? "text-red border-red/40 bg-red-dim hover:bg-red/20"
         : "text-red border-red/20 bg-red-dim hover:bg-red/20",
