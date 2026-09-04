@@ -26,7 +26,7 @@ Lock screen and security center for **this origin**. Real telemetry. Real Grok a
 
 ## Android APK
 
-Install a **2.1.0+** APK. 2.0.x could overlay the keyguard and trap the phone — that is fixed.
+Install a **2.1.1+** APK. 2.0.x could overlay the keyguard and trap the phone — that is fixed.
 
 1. Open [Releases](https://github.com/xz64uj777/kysmindset/releases)
 2. Install `app-debug.apk`
@@ -34,3 +34,5 @@ Install a **2.1.0+** APK. 2.0.x could overlay the keyguard and trap the phone �
 4. Kill asks for Android VPN if you want other apps offline
 
 If an older build already trapped the phone: boot **Safe Mode** (hold Power → long-press Reboot), uninstall Kysmindset, or Settings → Security → Device admin apps → turn it off.
+
+2.1.1 hygiene: backup off, cleartext off, WebView locked to bundled assets, debug keystore no longer in the repo. A new APK may not install *over* an old one — uninstall the old app first, then install. Device Owner must be enrolled again after that.
