@@ -137,7 +137,6 @@ public final class AppUpdate {
                         sink.emit(progress("install", 100));
                         if (Build.VERSION.SDK_INT >= 26
                             && !ctx.getPackageManager().canRequestPackageInstalls()) {
-                            MainActivity.skipNextAutoLock(ctx);
                             Intent perm = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                             perm.setData(Uri.parse("package:" + ctx.getPackageName()));
                             perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -267,7 +266,6 @@ public final class AppUpdate {
     }
 
     private static void installView(Context ctx, File apk, Sink sink) throws Exception {
-        MainActivity.skipNextAutoLock(ctx);
         Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".files", apk);
 
         Intent install = new Intent(Intent.ACTION_VIEW);
@@ -282,6 +280,7 @@ public final class AppUpdate {
             .post(
                 () -> {
                     try {
+                        prepareSystemHandoff(ctx);
                         ctx.startActivity(install);
                         sink.emit(progress("prompt", 100));
                     } catch (Exception e) {
@@ -295,11 +294,23 @@ public final class AppUpdate {
             .post(
                 () -> {
                     try {
+                        prepareSystemHandoff(ctx);
                         ctx.startActivity(intent);
                     } catch (Exception e) {
                         sink.emit(err("install-fail", fallback + ": " + usefulMessage(e)));
                     }
                 });
+    }
+
+    /** Let Android Settings / Package Installer come to the foreground even if app pinning is on. */
+    private static void prepareSystemHandoff(Context ctx) {
+        MainActivity.skipNextAutoLock(ctx);
+        if (ctx instanceof MainActivity) {
+            try {
+                ((MainActivity) ctx).stopLockTask();
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     private static void download(String src, File dest, Sink sink) throws Exception {
