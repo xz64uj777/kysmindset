@@ -131,7 +131,8 @@ final class VpnEngine {
                 s.dstPort = dstPort;
                 s.alive = true;
                 udp.put(key, s);
-                Thread t = new Thread(() -> recvUdp(key, s), "kys-u-" + srcPort);
+                final UdpSess sess = s;
+                Thread t = new Thread(() -> recvUdp(key, sess), "kys-u-" + srcPort);
                 t.setDaemon(true);
                 s.th = t;
                 t.start();
