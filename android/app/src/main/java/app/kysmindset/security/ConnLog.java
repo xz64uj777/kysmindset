@@ -43,6 +43,7 @@ public final class ConnLog {
     private long bytesIn;
     private long bytesOut;
     private int drops;
+    private int tunPackets;
 
     private ConnLog(Context ctx) {
         this.ctx = ctx;
@@ -88,6 +89,7 @@ public final class ConnLog {
         bytesIn = 0;
         bytesOut = 0;
         drops = 0;
+        tunPackets = 0;
     }
 
     public synchronized void rememberDns(String ip, String host) {
@@ -124,11 +126,13 @@ public final class ConnLog {
         String ip = dst.getHostAddress();
         if (ip == null) return true;
         int uid = lookupUid(proto, src, srcPort, dst, dstPort);
+        if (uid <= 0) uid = lookupUid(proto, dst, dstPort, src, srcPort);
         String pkg = pkgOf(uid);
         String name = labelOf(pkg, uid);
         boolean drop = shouldDrop(pkg);
-        String key = (pkg == null ? String.valueOf(uid) : pkg) + "|" + proto + "|" + ip + "|" + dstPort;
+        String key = proto + "|" + srcPort + "|" + ip + "|" + dstPort;
         synchronized (this) {
+            tunPackets++;
             if (outgoing) bytesOut += len;
             else bytesIn += len;
             if (drop) drops++;
@@ -149,12 +153,15 @@ public final class ConnLog {
                 r.port = dstPort;
                 r.host = dns.get(ip);
                 rows.put(key, r);
+            } else if ((r.pkg == null || r.pkg.isEmpty()) && pkg != null) {
+                r.pkg = pkg;
+                r.name = name;
             }
             r.packets++;
             r.bytes += len;
             r.lastAt = System.currentTimeMillis();
             r.blocked = drop;
-            if (r.host == null) r.host = dns.get(ip);
+            if (r.host == null || r.host.isEmpty()) r.host = dns.get(ip);
         }
         return !drop;
     }
@@ -187,6 +194,7 @@ public final class ConnLog {
             out.put("bytesIn", bytesIn);
             out.put("bytesOut", bytesOut);
             out.put("drops", drops);
+            out.put("tunPackets", tunPackets);
             out.put("rows", arr);
         } catch (Exception ignored) {
         }

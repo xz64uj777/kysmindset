@@ -120,6 +120,12 @@ public class KillVpnService extends VpnService {
         b.addRoute("0.0.0.0", 0);
         b.addDnsServer("1.1.1.1");
         b.addDnsServer("8.8.8.8");
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                b.setMetered(false);
+            } catch (Exception ignored) {
+            }
+        }
         try {
             b.addAddress("fd00:8::2", 128);
             b.addRoute("::", 0);

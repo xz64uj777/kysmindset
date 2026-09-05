@@ -217,6 +217,7 @@ export type LiveNet = {
   bytesIn: number;
   bytesOut: number;
   drops: number;
+  tunPackets?: number;
   rows: LiveConn[];
 };
 

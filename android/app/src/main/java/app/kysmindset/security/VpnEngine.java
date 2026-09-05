@@ -5,39 +5,39 @@ import android.os.ParcelFileDescriptor;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.SocketChannel;
-import java.util.Iterator;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Reads the TUN, logs every connection, and forwards allowed packets so the
- * phone still has internet. Blocked apps are dropped.
+ * TUN reader + blocking sockets. Each TCP/UDP session is its own thread so we
+ * never register NIO channels from the wrong thread (that broke the first pass).
  */
 final class VpnEngine {
+    private static final byte[] FIN = new byte[0];
     private final VpnService vpn;
-    private final ParcelFileDescriptor tun;
     private final ConnLog log;
     private final FileInputStream in;
     private final FileOutputStream out;
     private volatile boolean running;
-    private Selector selector;
-    private final Map<String, TcpPipe> tcp = new ConcurrentHashMap<>();
-    private final Map<String, UdpPipe> udp = new ConcurrentHashMap<>();
-    private final AtomicInteger mySeqBase = new AtomicInteger((int) (System.nanoTime() & 0x7fffffff));
+    private final Map<String, TcpSess> tcp = new ConcurrentHashMap<>();
+    private final Map<String, UdpSess> udp = new ConcurrentHashMap<>();
+    private final AtomicInteger ipId = new AtomicInteger(1);
+    private final AtomicInteger seqGen = new AtomicInteger((int) (System.nanoTime() & 0x3fffffff) + 10000);
     private Thread reader;
-    private Thread pump;
 
     VpnEngine(VpnService vpn, ParcelFileDescriptor tun, ConnLog log) {
         this.vpn = vpn;
-        this.tun = tun;
         this.log = log;
         this.in = new FileInputStream(tun.getFileDescriptor());
         this.out = new FileOutputStream(tun.getFileDescriptor());
@@ -45,23 +45,13 @@ final class VpnEngine {
 
     void start() {
         running = true;
-        try {
-            selector = Selector.open();
-        } catch (Exception e) {
-            return;
-        }
         reader = new Thread(this::readLoop, "kys-tun");
-        pump = new Thread(this::pumpLoop, "kys-sock");
+        reader.setDaemon(true);
         reader.start();
-        pump.start();
     }
 
     void stop() {
         running = false;
-        try {
-            if (selector != null) selector.wakeup();
-        } catch (Exception ignored) {
-        }
         closeAll();
         try {
             in.close();
@@ -89,93 +79,88 @@ final class VpnEngine {
         }
     }
 
-    private void pumpLoop() {
-        ByteBuffer read = ByteBuffer.allocate(32767);
-        while (running) {
-            try {
-                selector.select(500);
-                Iterator<SelectionKey> it = selector.selectedKeys().iterator();
-                while (it.hasNext()) {
-                    SelectionKey k = it.next();
-                    it.remove();
-                    if (!k.isValid()) continue;
-                    Object att = k.attachment();
-                    if (att instanceof UdpPipe) {
-                        if (k.isReadable()) drainUdp((UdpPipe) att, read);
-                    } else if (att instanceof TcpPipe) {
-                        TcpPipe p = (TcpPipe) att;
-                        if (k.isConnectable()) finishTcp(p);
-                        if (k.isValid() && k.isReadable()) drainTcp(p, read);
-                    }
-                }
-            } catch (Exception e) {
-                if (!running) break;
-            }
-        }
-    }
-
     private void handle(byte[] pkt, int n) {
         if (n < 20) return;
         int ver = (pkt[0] >> 4) & 0xf;
-        if (ver == 4) handle4(pkt, n);
-        else if (ver == 6) handle6(pkt, n);
+        if (ver == 4) {
+            int ihl = (pkt[0] & 0xf) * 4;
+            if (ihl < 20 || n < ihl + 4) return;
+            int proto = pkt[9] & 0xff;
+            byte[] src = slice(pkt, 12, 4);
+            byte[] dst = slice(pkt, 16, 4);
+            if (proto == 17) handleUdp(pkt, n, false, ihl, src, dst);
+            else if (proto == 6) handleTcp(pkt, n, false, ihl, src, dst);
+        } else if (ver == 6) {
+            if (n < 48) return;
+            int proto = pkt[6] & 0xff;
+            byte[] src = slice(pkt, 8, 16);
+            byte[] dst = slice(pkt, 24, 16);
+            if (proto == 17) handleUdp(pkt, n, true, 40, src, dst);
+            else if (proto == 6) handleTcp(pkt, n, true, 40, src, dst);
+        }
     }
 
-    private void handle4(byte[] pkt, int n) {
-        int ihl = (pkt[0] & 0xf) * 4;
-        if (ihl < 20 || n < ihl + 4) return;
-        int proto = pkt[9] & 0xff;
-        byte[] src = slice(pkt, 12, 4);
-        byte[] dst = slice(pkt, 16, 4);
-        if (proto == 17) handleUdp(pkt, n, false, ihl, src, dst, 17);
-        else if (proto == 6) handleTcp(pkt, n, false, ihl, src, dst);
-    }
-
-    private void handle6(byte[] pkt, int n) {
-        if (n < 48) return;
-        int proto = pkt[6] & 0xff;
-        byte[] src = slice(pkt, 8, 16);
-        byte[] dst = slice(pkt, 24, 16);
-        int off = 40;
-        if (proto == 17) handleUdp(pkt, n, true, off, src, dst, 17);
-        else if (proto == 6) handleTcp(pkt, n, true, off, src, dst);
-    }
-
-    private void handleUdp(byte[] pkt, int n, boolean v6, int off, byte[] src, byte[] dst, int proto) {
+    private void handleUdp(byte[] pkt, int n, boolean v6, int off, byte[] src, byte[] dst) {
         if (n < off + 8) return;
         int srcPort = u16(pkt, off);
         int dstPort = u16(pkt, off + 2);
-        int payload = off + 8;
-        int plen = n - payload;
+        int payloadOff = off + 8;
+        int plen = n - payloadOff;
         InetAddress sAddr = addr(src);
         InetAddress dAddr = addr(dst);
         if (sAddr == null || dAddr == null) return;
         boolean ok = log.onPacket(17, sAddr, srcPort, dAddr, dstPort, Math.max(0, plen), true);
         if (!ok) return;
-        String key = (v6 ? "6" : "4") + ":" + srcPort + ":" + dAddr.getHostAddress() + ":" + dstPort;
-        UdpPipe p = udp.get(key);
+        if (dstPort == 53 && plen > 12) noteDnsQuery(pkt, payloadOff, plen);
+        String key = (v6 ? "6" : "4") + "u" + srcPort + ":" + dAddr.getHostAddress() + ":" + dstPort;
+        UdpSess s = udp.get(key);
         try {
-            if (p == null) {
-                if (udp.size() > 128) evictUdp();
-                DatagramChannel ch = DatagramChannel.open();
-                ch.configureBlocking(false);
-                vpn.protect(ch.socket());
-                ch.connect(new InetSocketAddress(dAddr, dstPort));
-                p = new UdpPipe();
-                p.ch = ch;
-                p.v6 = v6;
-                p.src = src;
-                p.dst = dst;
-                p.srcPort = srcPort;
-                p.dstPort = dstPort;
-                udp.put(key, p);
-                ch.register(selector, SelectionKey.OP_READ, p);
-                selector.wakeup();
+            if (s == null) {
+                if (udp.size() > 64) evict(udp);
+                DatagramSocket sock = new DatagramSocket(null);
+                vpn.protect(sock);
+                sock.bind(new InetSocketAddress(0));
+                sock.connect(dAddr, dstPort);
+                sock.setSoTimeout(200);
+                s = new UdpSess();
+                s.sock = sock;
+                s.v6 = v6;
+                s.src = src;
+                s.dst = dst;
+                s.srcPort = srcPort;
+                s.dstPort = dstPort;
+                s.alive = true;
+                udp.put(key, s);
+                Thread t = new Thread(() -> recvUdp(key, s), "kys-u-" + srcPort);
+                t.setDaemon(true);
+                s.th = t;
+                t.start();
             }
-            if (plen > 0) p.ch.write(ByteBuffer.wrap(pkt, payload, plen));
+            if (plen > 0) {
+                s.sock.send(new DatagramPacket(pkt, payloadOff, plen));
+            }
         } catch (Exception e) {
             closeUdp(key);
         }
+    }
+
+    private void recvUdp(String key, UdpSess s) {
+        byte[] buf = new byte[8192];
+        while (running && s.alive) {
+            try {
+                DatagramPacket p = new DatagramPacket(buf, buf.length);
+                s.sock.receive(p);
+                int n = p.getLength();
+                if (n <= 0) continue;
+                log.addBytes(n, false);
+                if (s.dstPort == 53) parseDnsAnswers(buf, n);
+                injectUdp(s, buf, n);
+            } catch (SocketTimeoutException ignored) {
+            } catch (Exception e) {
+                break;
+            }
+        }
+        closeUdp(key);
     }
 
     private void handleTcp(byte[] pkt, int n, boolean v6, int off, byte[] src, byte[] dst) {
@@ -185,139 +170,124 @@ final class VpnEngine {
         long seq = u32(pkt, off + 4);
         int doff = ((pkt[off + 12] >> 4) & 0xf) * 4;
         int flags = pkt[off + 13] & 0xff;
-        int payload = off + doff;
-        int plen = Math.max(0, n - payload);
+        int payloadOff = off + doff;
+        int plen = Math.max(0, n - payloadOff);
         boolean syn = (flags & 0x02) != 0;
-        boolean ack = (flags & 0x10) != 0;
         boolean fin = (flags & 0x01) != 0;
         boolean rst = (flags & 0x04) != 0;
         InetAddress sAddr = addr(src);
         InetAddress dAddr = addr(dst);
         if (sAddr == null || dAddr == null) return;
         boolean ok = log.onPacket(6, sAddr, srcPort, dAddr, dstPort, plen, true);
-        String key = (v6 ? "6" : "4") + ":" + srcPort + ":" + dAddr.getHostAddress() + ":" + dstPort;
+        String key = (v6 ? "6" : "4") + "t" + srcPort + ":" + dAddr.getHostAddress() + ":" + dstPort;
         if (!ok) {
             if (syn) injectRst(v6, src, dst, srcPort, dstPort, seq);
             closeTcp(key);
             return;
         }
-        TcpPipe p = tcp.get(key);
+        if (rst) {
+            closeTcp(key);
+            return;
+        }
+        TcpSess s = tcp.get(key);
+        if (s == null) {
+            if (!syn) return;
+            if (tcp.size() > 96) evict(tcp);
+            s = new TcpSess();
+            s.v6 = v6;
+            s.src = src;
+            s.dst = dst;
+            s.srcPort = srcPort;
+            s.dstPort = dstPort;
+            s.theirSeq = seq + 1;
+            s.mySeq = seqGen.addAndGet(4096);
+            s.q = new LinkedBlockingQueue<>(256);
+            s.alive = true;
+            tcp.put(key, s);
+            final TcpSess sess = s;
+            Thread t = new Thread(() -> runTcp(key, sess, dAddr, dstPort), "kys-t-" + srcPort);
+            t.setDaemon(true);
+            s.th = t;
+            t.start();
+            return;
+        }
+        if (fin) {
+            s.theirSeq = seq + 1 + plen;
+            s.q.offer(FIN);
+            return;
+        }
+        if (plen > 0) {
+            s.theirSeq = seq + plen;
+            byte[] copy = Arrays.copyOfRange(pkt, payloadOff, payloadOff + plen);
+            if (!s.q.offer(copy)) {
+                /* slow app; drop this chunk */
+            }
+        }
+    }
+
+    private void runTcp(String key, TcpSess s, InetAddress dest, int port) {
+        Socket sock = new Socket();
+        s.sock = sock;
         try {
-            if (rst) {
-                closeTcp(key);
-                return;
-            }
-            if (p == null) {
-                if (!syn) return;
-                if (tcp.size() > 256) evictTcp();
-                SocketChannel ch = SocketChannel.open();
-                ch.configureBlocking(false);
-                vpn.protect(ch.socket());
-                p = new TcpPipe();
-                p.ch = ch;
-                p.v6 = v6;
-                p.src = src;
-                p.dst = dst;
-                p.srcPort = srcPort;
-                p.dstPort = dstPort;
-                p.mySeq = mySeqBase.addAndGet(2048);
-                p.theirSeq = seq + 1;
-                p.status = TcpPipe.CONNECTING;
-                tcp.put(key, p);
-                ch.register(selector, SelectionKey.OP_CONNECT, p);
-                ch.connect(new InetSocketAddress(dAddr, dstPort));
-                selector.wakeup();
-                return;
-            }
-            if (p.status == TcpPipe.CONNECTING) return;
-            if (fin) {
-                p.theirSeq = seq + 1 + plen;
-                injectTcp(p, 0x11, null, 0); // FIN+ACK
-                closeTcp(key);
-                return;
-            }
-            if (plen > 0 && p.ch.isConnected()) {
-                p.theirSeq = seq + plen;
-                p.ch.write(ByteBuffer.wrap(pkt, payload, plen));
-                injectTcp(p, 0x10, null, 0); // ACK
+            vpn.protect(sock);
+            sock.setTcpNoDelay(true);
+            sock.setKeepAlive(true);
+            sock.connect(new InetSocketAddress(dest, port), 8000);
+            sock.setSoTimeout(50);
+            injectTcp(s, 0x12, synAckOpts(), 0); // SYN+ACK + MSS
+            s.mySeq++;
+            InputStream is = sock.getInputStream();
+            OutputStream os = sock.getOutputStream();
+            byte[] buf = new byte[8192];
+            while (running && s.alive && !sock.isClosed()) {
+                byte[] outb;
+                while ((outb = s.q.poll()) != null) {
+                    if (outb == FIN) {
+                        injectTcp(s, 0x11, null, 0);
+                        s.alive = false;
+                        break;
+                    }
+                    os.write(outb);
+                    os.flush();
+                    injectTcp(s, 0x10, null, 0); // ACK
+                }
+                if (!s.alive) break;
+                try {
+                    int n = is.read(buf);
+                    if (n < 0) {
+                        injectTcp(s, 0x11, null, 0);
+                        break;
+                    }
+                    if (n == 0) continue;
+                    log.addBytes(n, false);
+                    byte[] payload = Arrays.copyOf(buf, n);
+                    injectTcp(s, 0x18, payload, n); // PSH+ACK
+                    s.mySeq += n;
+                } catch (SocketTimeoutException ignored) {
+                }
             }
         } catch (Exception e) {
+            injectRst(s.v6, s.src, s.dst, s.srcPort, s.dstPort, s.theirSeq - 1);
+        } finally {
             closeTcp(key);
         }
     }
 
-    private void finishTcp(TcpPipe p) {
-        try {
-            if (p.ch.finishConnect()) {
-                p.status = TcpPipe.ESTABLISHED;
-                p.ch.register(selector, SelectionKey.OP_READ, p);
-                injectTcp(p, 0x12, null, 0); // SYN+ACK
-                p.mySeq++;
-            } else {
-                injectRst(p.v6, p.src, p.dst, p.srcPort, p.dstPort, p.theirSeq - 1);
-                closeTcp(keyOf(p));
-            }
-        } catch (Exception e) {
-            injectRst(p.v6, p.src, p.dst, p.srcPort, p.dstPort, p.theirSeq - 1);
-            closeTcp(keyOf(p));
-        }
+    private static byte[] synAckOpts() {
+        return new byte[] {2, 4, 0x05, 0x50, 1, 1, 1, 1}; // MSS 1360 + NOP pad
     }
 
-    private void drainUdp(UdpPipe p, ByteBuffer read) {
-        try {
-            read.clear();
-            int n = p.ch.read(read);
-            if (n <= 0) return;
-            log.addBytes(n, false);
-            if (p.dstPort == 53) {
-                byte[] raw = new byte[n];
-                read.flip();
-                read.get(raw);
-                parseDnsAnswers(raw, 0, n);
-                injectUdp(p, raw, 0, n);
-            } else {
-                injectUdp(p, read.array(), read.arrayOffset(), n);
-            }
-        } catch (Exception e) {
-            closeUdp(keyOf(p));
-        }
+    private void injectUdp(UdpSess s, byte[] payload, int len) {
+        writeTun(buildUdp(s.v6, s.dst, s.src, s.dstPort, s.srcPort, payload, 0, len));
     }
 
-    private void drainTcp(TcpPipe p, ByteBuffer read) {
-        try {
-            read.clear();
-            int n = p.ch.read(read);
-            if (n < 0) {
-                injectTcp(p, 0x11, null, 0);
-                closeTcp(keyOf(p));
-                return;
-            }
-            if (n == 0) return;
-            log.addBytes(n, false);
-            byte[] payload = new byte[n];
-            read.flip();
-            read.get(payload);
-            injectTcp(p, 0x18, payload, n); // PSH+ACK
-            p.mySeq += n;
-        } catch (Exception e) {
-            closeTcp(keyOf(p));
-        }
-    }
-
-    private void injectUdp(UdpPipe p, byte[] payload, int off, int len) {
-        byte[] pkt = buildUdp(p.v6, p.dst, p.src, p.dstPort, p.srcPort, payload, off, len);
-        writeTun(pkt);
-    }
-
-    private void injectTcp(TcpPipe p, int flags, byte[] payload, int len) {
-        byte[] pkt =
-            buildTcp(p.v6, p.dst, p.src, p.dstPort, p.srcPort, p.mySeq, p.theirSeq, flags, payload, len);
-        writeTun(pkt);
+    private void injectTcp(TcpSess s, int flags, byte[] payload, int len) {
+        writeTun(
+            buildTcp(s.v6, s.dst, s.src, s.dstPort, s.srcPort, s.mySeq, s.theirSeq, flags, payload, len));
     }
 
     private void injectRst(boolean v6, byte[] src, byte[] dst, int srcPort, int dstPort, long seq) {
-        byte[] pkt = buildTcp(v6, dst, src, dstPort, srcPort, 0, seq + 1, 0x14, null, 0);
-        writeTun(pkt);
+        writeTun(buildTcp(v6, dst, src, dstPort, srcPort, 0, seq + 1, 0x14, null, 0));
     }
 
     private synchronized void writeTun(byte[] pkt) {
@@ -343,17 +313,19 @@ final class VpnEngine {
             put16(p, 42, dstPort);
             put16(p, 44, 8 + len);
             if (len > 0) System.arraycopy(payload, off, p, 48, len);
+            put16(p, 46, udpSum6(p, src, dst, 8 + len));
             return p;
         }
         int total = 20 + 8 + len;
         byte[] p = new byte[total];
         p[0] = 0x45;
         put16(p, 2, total);
+        put16(p, 4, ipId.getAndIncrement() & 0xffff);
         p[8] = 64;
         p[9] = 17;
         System.arraycopy(src, 0, p, 12, 4);
         System.arraycopy(dst, 0, p, 16, 4);
-        put16(p, 10, checksum(p, 0, 20));
+        put16(p, 10, ipSum(p, 0, 20));
         put16(p, 20, srcPort);
         put16(p, 22, dstPort);
         put16(p, 24, 8 + len);
@@ -372,90 +344,98 @@ final class VpnEngine {
         int flags,
         byte[] payload,
         int len) {
+        boolean syn = (flags & 0x02) != 0;
+        byte[] opt = syn ? synAckOpts() : null;
+        int optLen = opt == null ? 0 : opt.length;
         int l = payload == null ? 0 : len;
+        int tcpLen = 20 + optLen + l;
         if (v6) {
-            int total = 40 + 20 + l;
-            byte[] p = new byte[total];
+            byte[] p = new byte[40 + tcpLen];
             p[0] = 0x60;
-            put16(p, 4, 20 + l);
+            put16(p, 4, tcpLen);
             p[6] = 6;
             p[7] = 64;
             System.arraycopy(src, 0, p, 8, 16);
             System.arraycopy(dst, 0, p, 24, 16);
-            fillTcp(p, 40, srcPort, dstPort, seq, ack, flags, l);
-            if (l > 0) System.arraycopy(payload, 0, p, 60, l);
-            put16(p, 56, tcpSum6(p, src, dst, 20 + l));
+            fillTcp(p, 40, srcPort, dstPort, seq, ack, flags, opt);
+            if (l > 0) System.arraycopy(payload, 0, p, 40 + 20 + optLen, l);
+            put16(p, 56, tcpSum(p, 40, tcpLen, src, dst, 6));
             return p;
         }
-        int total = 20 + 20 + l;
-        byte[] p = new byte[total];
+        byte[] p = new byte[20 + tcpLen];
         p[0] = 0x45;
-        put16(p, 2, total);
+        put16(p, 2, p.length);
+        put16(p, 4, ipId.getAndIncrement() & 0xffff);
         p[8] = 64;
         p[9] = 6;
         System.arraycopy(src, 0, p, 12, 4);
         System.arraycopy(dst, 0, p, 16, 4);
-        put16(p, 10, checksum(p, 0, 20));
-        fillTcp(p, 20, srcPort, dstPort, seq, ack, flags, l);
-        if (l > 0) System.arraycopy(payload, 0, p, 40, l);
-        put16(p, 36, tcpSum4(p, 20 + l));
+        put16(p, 10, ipSum(p, 0, 20));
+        fillTcp(p, 20, srcPort, dstPort, seq, ack, flags, opt);
+        if (l > 0) System.arraycopy(payload, 0, p, 40 + optLen, l);
+        put16(p, 36, tcpSum(p, 20, tcpLen, src, dst, 6));
         return p;
     }
 
     private static void fillTcp(
-        byte[] p, int off, int srcPort, int dstPort, long seq, long ack, int flags, int plen) {
+        byte[] p, int off, int srcPort, int dstPort, long seq, long ack, int flags, byte[] opt) {
+        int optLen = opt == null ? 0 : opt.length;
         put16(p, off, srcPort);
         put16(p, off + 2, dstPort);
         put32(p, off + 4, seq);
-        put32(p, off + 6 + 2, ack);
-        p[off + 12] = (byte) 0x50;
+        put32(p, off + 8, ack);
+        int words = (20 + optLen) / 4;
+        p[off + 12] = (byte) (words << 4);
         p[off + 13] = (byte) flags;
         put16(p, off + 14, 65535);
+        if (optLen > 0) System.arraycopy(opt, 0, p, off + 20, optLen);
     }
 
-    private static int tcpSum4(byte[] ip, int tcpLen) {
+    private static int tcpSum(byte[] pkt, int tcpOff, int tcpLen, byte[] src, byte[] dst, int proto) {
         int sum = 0;
-        for (int i = 12; i < 20; i += 2) sum += u16(ip, i);
-        sum += 6;
+        for (int i = 0; i < src.length; i += 2) sum += ((src[i] & 0xff) << 8) | (src[i + 1] & 0xff);
+        for (int i = 0; i < dst.length; i += 2) sum += ((dst[i] & 0xff) << 8) | (dst[i + 1] & 0xff);
+        sum += proto;
         sum += tcpLen;
-        for (int i = 20; i < 20 + tcpLen - 1; i += 2) sum += u16(ip, i);
-        if ((tcpLen & 1) != 0) sum += (ip[20 + tcpLen - 1] & 0xff) << 8;
+        for (int i = 0; i < tcpLen - 1; i += 2) sum += u16(pkt, tcpOff + i);
+        if ((tcpLen & 1) != 0) sum += (pkt[tcpOff + tcpLen - 1] & 0xff) << 8;
         while ((sum >> 16) != 0) sum = (sum & 0xffff) + (sum >> 16);
         return ~sum & 0xffff;
     }
 
-    private static int tcpSum6(byte[] pkt, byte[] src, byte[] dst, int tcpLen) {
+    private static int udpSum6(byte[] pkt, byte[] src, byte[] dst, int udpLen) {
+        return tcpSum(pkt, 40, udpLen, src, dst, 17);
+    }
+
+    private static int ipSum(byte[] b, int off, int len) {
         int sum = 0;
-        for (int i = 0; i < 16; i += 2) sum += ((src[i] & 0xff) << 8) | (src[i + 1] & 0xff);
-        for (int i = 0; i < 16; i += 2) sum += ((dst[i] & 0xff) << 8) | (dst[i + 1] & 0xff);
-        sum += tcpLen;
-        sum += 6;
-        for (int i = 40; i < 40 + tcpLen - 1; i += 2) sum += u16(pkt, i);
-        if ((tcpLen & 1) != 0) sum += (pkt[40 + tcpLen - 1] & 0xff) << 8;
+        for (int i = 0; i < len - 1; i += 2) sum += u16(b, off + i);
         while ((sum >> 16) != 0) sum = (sum & 0xffff) + (sum >> 16);
         return ~sum & 0xffff;
     }
 
-    private static int checksum(byte[] b, int off, int len) {
-        int sum = 0;
-        int i = 0;
-        while (i < len - 1) {
-            sum += u16(b, off + i);
-            i += 2;
+    private void noteDnsQuery(byte[] pkt, int off, int len) {
+        try {
+            if (len < 12) return;
+            String q = readName(pkt, off, off + 12, off + len);
+            if (q != null) pendingQuery = q;
+        } catch (Exception ignored) {
         }
-        if (i < len) sum += (b[off + i] & 0xff) << 8;
-        while ((sum >> 16) != 0) sum = (sum & 0xffff) + (sum >> 16);
-        return ~sum & 0xffff;
     }
 
-    private void parseDnsAnswers(byte[] d, int off, int len) {
+    private volatile String pendingQuery;
+
+    private void parseDnsAnswers(byte[] d, int len) {
         if (len < 12) return;
         int qd = u16(d, 4);
         int an = u16(d, 6);
         int pos = 12;
         try {
+            String q = pendingQuery;
             for (int i = 0; i < qd; i++) {
+                int start = pos;
                 pos = skipName(d, pos, len);
+                if (q == null) q = readName(d, 0, start, len);
                 pos += 4;
             }
             for (int i = 0; i < an && pos + 10 <= len; i++) {
@@ -465,7 +445,7 @@ final class VpnEngine {
                 int rdlen = u16(d, pos);
                 pos += 2;
                 if (pos + rdlen > len) break;
-                if (type == 1 && rdlen == 4) {
+                if (type == 1 && rdlen == 4 && q != null) {
                     String ip =
                         (d[pos] & 0xff)
                             + "."
@@ -474,8 +454,10 @@ final class VpnEngine {
                             + (d[pos + 2] & 0xff)
                             + "."
                             + (d[pos + 3] & 0xff);
-                    String host = readName(d, 0, 12, len);
-                    if (host != null) log.rememberDns(ip, host);
+                    log.rememberDns(ip, q);
+                } else if (type == 28 && rdlen == 16 && q != null) {
+                    InetAddress a = InetAddress.getByAddress(slice(d, pos, 16));
+                    log.rememberDns(a.getHostAddress(), q);
                 }
                 pos += rdlen;
             }
@@ -486,10 +468,11 @@ final class VpnEngine {
     private static String readName(byte[] d, int base, int pos, int end) {
         StringBuilder b = new StringBuilder();
         int guard = 0;
-        while (pos < end && guard++ < 32) {
+        while (pos < end && guard++ < 40) {
             int l = d[pos] & 0xff;
             if (l == 0) break;
             if ((l & 0xc0) == 0xc0) {
+                if (pos + 1 >= end) break;
                 pos = ((l & 0x3f) << 8) | (d[pos + 1] & 0xff);
                 continue;
             }
@@ -504,7 +487,7 @@ final class VpnEngine {
 
     private static int skipName(byte[] d, int pos, int end) {
         int guard = 0;
-        while (pos < end && guard++ < 32) {
+        while (pos < end && guard++ < 40) {
             int l = d[pos] & 0xff;
             if (l == 0) return pos + 1;
             if ((l & 0xc0) == 0xc0) return pos + 2;
@@ -513,30 +496,33 @@ final class VpnEngine {
         return pos;
     }
 
-    private void evictUdp() {
-        String first = udp.keySet().stream().findFirst().orElse(null);
-        if (first != null) closeUdp(first);
-    }
-
-    private void evictTcp() {
-        String first = tcp.keySet().stream().findFirst().orElse(null);
-        if (first != null) closeTcp(first);
+    private void evict(Map<String, ?> m) {
+        String first = null;
+        for (String k : m.keySet()) {
+            first = k;
+            break;
+        }
+        if (first == null) return;
+        if (m == udp) closeUdp(first);
+        else closeTcp(first);
     }
 
     private void closeUdp(String key) {
-        UdpPipe p = udp.remove(key);
-        if (p == null) return;
+        UdpSess s = udp.remove(key);
+        if (s == null) return;
+        s.alive = false;
         try {
-            p.ch.close();
+            s.sock.close();
         } catch (Exception ignored) {
         }
     }
 
     private void closeTcp(String key) {
-        TcpPipe p = tcp.remove(key);
-        if (p == null) return;
+        TcpSess s = tcp.remove(key);
+        if (s == null) return;
+        s.alive = false;
         try {
-            p.ch.close();
+            if (s.sock != null) s.sock.close();
         } catch (Exception ignored) {
         }
     }
@@ -544,23 +530,6 @@ final class VpnEngine {
     private void closeAll() {
         for (String k : new java.util.ArrayList<>(udp.keySet())) closeUdp(k);
         for (String k : new java.util.ArrayList<>(tcp.keySet())) closeTcp(k);
-        try {
-            if (selector != null) selector.close();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static String keyOf(UdpPipe p) {
-        return (p.v6 ? "6" : "4") + ":" + p.srcPort + ":" + ip(p.dst) + ":" + p.dstPort;
-    }
-
-    private static String keyOf(TcpPipe p) {
-        return (p.v6 ? "6" : "4") + ":" + p.srcPort + ":" + ip(p.dst) + ":" + p.dstPort;
-    }
-
-    private static String ip(byte[] a) {
-        InetAddress x = addr(a);
-        return x == null ? "" : x.getHostAddress();
     }
 
     private static InetAddress addr(byte[] a) {
@@ -583,7 +552,7 @@ final class VpnEngine {
 
     private static long u32(byte[] b, int i) {
         return ((long) (b[i] & 0xff) << 24)
-            | ((b[i + 1] & 0xff) << 16)
+            | ((long) (b[i + 1] & 0xff) << 16)
             | ((b[i + 2] & 0xff) << 8)
             | (b[i + 3] & 0xff);
     }
@@ -600,26 +569,28 @@ final class VpnEngine {
         b[i + 3] = (byte) v;
     }
 
-    static final class UdpPipe {
-        DatagramChannel ch;
+    static final class UdpSess {
+        DatagramSocket sock;
+        Thread th;
         boolean v6;
         byte[] src;
         byte[] dst;
         int srcPort;
         int dstPort;
+        volatile boolean alive;
     }
 
-    static final class TcpPipe {
-        static final int CONNECTING = 0;
-        static final int ESTABLISHED = 1;
-        SocketChannel ch;
+    static final class TcpSess {
+        Socket sock;
+        Thread th;
+        LinkedBlockingQueue<byte[]> q;
         boolean v6;
         byte[] src;
         byte[] dst;
         int srcPort;
         int dstPort;
         int mySeq;
-        long theirSeq;
-        int status;
+        volatile long theirSeq;
+        volatile boolean alive;
     }
 }

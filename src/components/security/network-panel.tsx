@@ -73,7 +73,7 @@ function PhoneNetwork() {
         <div className="grid grid-cols-3 gap-2 text-center">
           <Stat label="Apps" value={String(groups.length)} />
           <Stat label="Sockets" value={String(rows.length)} />
-          <Stat label="Cut" value={String(net?.drops ?? 0)} hot={(net?.drops ?? 0) > 0} />
+          <Stat label="Seen" value={String(net?.tunPackets ?? 0)} />
         </div>
         {!killSwitch ? (
           <div className="mt-3 rounded-md border border-amber/20 bg-amber-dim px-3 py-2">
@@ -117,7 +117,11 @@ function PhoneNetwork() {
         </div>
         {groups.length === 0 ? (
           <p className="py-8 text-center text-xs text-subtle">
-            {killSwitch ? "Waiting for an app to go online…" : "Start Protection, then open Chrome or Messages."}
+            {killSwitch
+              ? (net?.tunPackets ?? 0) > 0
+                ? "Seeing packets — names fill in as Android tells us who owns them."
+                : "VPN is up. Open Chrome or Messages, then come back."
+              : "Start Protection, then open Chrome or Messages."}
           </p>
         ) : (
           <div className="space-y-2">
