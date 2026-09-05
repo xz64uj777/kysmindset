@@ -1,14 +1,15 @@
 package app.kysmindset.security;
 
-import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 
 import androidx.core.content.FileProvider;
@@ -17,10 +18,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +31,6 @@ public final class AppUpdate {
         "https://api.github.com/repos/xz64uj777/kysmindset/releases/tags/apk-latest";
     public static final String APK_URL =
         "https://github.com/xz64uj777/kysmindset/releases/download/apk-latest/Kysmindset-2.apk";
-    public static final String ACTION_INSTALLED = "app.kysmindset.security.UPDATE_INSTALLED";
 
     public interface Sink {
         void emit(String json);
@@ -43,6 +41,8 @@ public final class AppUpdate {
     public static int localCode(Context ctx) {
         try {
             PackageInfo p = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+            if (Build.VERSION.SDK_INT >= 28) return (int) p.getLongVersionCode();
+            //noinspection deprecation
             return p.versionCode;
         } catch (Exception e) {
             return 1;
@@ -96,7 +96,7 @@ public final class AppUpdate {
                         o.put("url", url);
                         sink.emit(o.toString());
                     } catch (Exception e) {
-                        sink.emit(err("check-fail", e.getMessage()));
+                        sink.emit(err("check-fail", usefulMessage(e)));
                     }
                 })
             .start();
@@ -105,15 +105,27 @@ public final class AppUpdate {
     public static void install(Context ctx, Sink sink) {
         new Thread(
                 () -> {
-                    File apk = new File(new File(ctx.getCacheDir(), "update"), "app-debug.apk");
+                    File apk = new File(new File(ctx.getCacheDir(), "update"), "Kysmindset-2.apk");
                     try {
                         if (apk.getParentFile() != null) apk.getParentFile().mkdirs();
-                        sink.emit(progress("download", 0));
-                        download(APK_URL, apk, sink);
-                        if (!apk.isFile() || apk.length() < 10_000) {
-                            sink.emit(err("bad-apk", "Download was empty"));
+
+                        JSONObject rel = fetchJson(RELEASE_API);
+                        int remote = parseRemoteCode(rel);
+                        int local = localCode(ctx);
+                        String src = apkUrl(rel);
+
+                        if (remote > 0 && remote <= local) {
+                            sink.emit(err("current", "Kysmindset 2 is already up to date"));
                             return;
                         }
+
+                        sink.emit(progress("download", 0));
+                        download(src, apk, sink);
+                        if (!apk.isFile() || apk.length() < 10_000) {
+                            sink.emit(err("bad-apk", "Downloaded APK was empty or incomplete"));
+                            return;
+                        }
+
                         String bad = verifyApk(ctx, apk);
                         if (bad != null) {
                             //noinspection ResultOfMethodCallIgnored
@@ -121,57 +133,76 @@ public final class AppUpdate {
                             sink.emit(err("bad-apk", bad));
                             return;
                         }
+
                         sink.emit(progress("install", 100));
-                        boolean owner = DeviceOwner.isOwner(ctx);
-                        if (!owner
-                            && Build.VERSION.SDK_INT >= 26
+                        if (Build.VERSION.SDK_INT >= 26
                             && !ctx.getPackageManager().canRequestPackageInstalls()) {
                             MainActivity.skipNextAutoLock(ctx);
-                            Intent perm =
-                                new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                            Intent perm = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                             perm.setData(Uri.parse("package:" + ctx.getPackageName()));
                             perm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            ctx.startActivity(perm);
+                            startOnMain(
+                                ctx,
+                                perm,
+                                sink,
+                                "Could not open the Install unknown apps setting");
                             sink.emit(
                                 err(
                                     "need-permission",
-                                    "Allow installs from Kysmindset 2, then tap Update again"));
+                                    "Allow installs from Kysmindset 2, return here, then tap Update now again"));
                             return;
                         }
-                        if (!installSession(ctx, apk)) installView(ctx, apk);
-                        sink.emit(progress("prompt", 100));
+
+                        // Use Android's visible package installer directly. The previous Session.commit
+                        // path could return STATUS_PENDING_USER_ACTION to MainActivity without opening
+                        // the approval Intent, which made the updater appear to stop after download.
+                        installView(ctx, apk, sink);
                     } catch (Exception e) {
-                        sink.emit(err("install-fail", e.getMessage()));
+                        sink.emit(err("install-fail", usefulMessage(e)));
                     }
                 })
             .start();
     }
 
-    /** Null if the APK is this app, signed with the same key. Otherwise a message. */
+    /** Null if the APK is this app, newer than the installed build, and signed with the same key. */
     static String verifyApk(Context ctx, File apk) {
         PackageManager pm = ctx.getPackageManager();
         PackageInfo incoming = archiveInfo(pm, apk);
         if (incoming == null || incoming.packageName == null) {
-            return "Download is not a valid APK";
+            return "Download is not a valid Android APK";
         }
         if (!ctx.getPackageName().equals(incoming.packageName)) {
-            return "APK is a different app";
+            return "Downloaded APK is a different app (" + incoming.packageName + ")";
         }
+
+        long incomingCode = versionCode(incoming);
+        int local = localCode(ctx);
+        if (incomingCode <= local) {
+            return "Downloaded APK is not newer than the installed version";
+        }
+
         Signature[] mine;
         Signature[] theirs;
         try {
             mine = signers(installedInfo(ctx, pm));
             theirs = signers(incoming);
         } catch (Exception e) {
-            return "Could not read signing key";
+            return "Could not verify the APK signing certificate";
         }
         if (mine.length == 0 || theirs.length == 0) {
-            return "Could not read signing key";
+            return "Could not verify the APK signing certificate";
         }
         if (!sameSigner(mine, theirs)) {
-            return "APK is not signed with this app's key";
+            return "Downloaded APK is signed with a different key, so Android cannot update this install";
         }
         return null;
+    }
+
+    private static long versionCode(PackageInfo info) {
+        if (info == null) return 0;
+        if (Build.VERSION.SDK_INT >= 28) return info.getLongVersionCode();
+        //noinspection deprecation
+        return info.versionCode;
     }
 
     @SuppressWarnings("deprecation")
@@ -235,46 +266,40 @@ public final class AppUpdate {
         return false;
     }
 
-    private static boolean installSession(Context ctx, File apk) {
-        try {
-            PackageInstaller installer = ctx.getPackageManager().getPackageInstaller();
-            PackageInstaller.SessionParams params =
-                new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            params.setAppPackageName(ctx.getPackageName());
-            if (Build.VERSION.SDK_INT >= 31) {
-                params.setRequireUserAction(
-                    PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
-            }
-            int id = installer.createSession(params);
-            PackageInstaller.Session session = installer.openSession(id);
-            try (InputStream in = new FileInputStream(apk);
-                OutputStream out = session.openWrite("app.apk", 0, apk.length())) {
-                byte[] buf = new byte[64 * 1024];
-                int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                session.fsync(out);
-            }
-            Intent cb = new Intent(ctx, MainActivity.class);
-            cb.setAction(ACTION_INSTALLED);
-            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-            if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
-            PendingIntent pi = PendingIntent.getActivity(ctx, id, cb, flags);
-            session.commit(pi.getIntentSender());
-            session.close();
-            return true;
-        } catch (Exception e) {
-            return false;
+    private static void installView(Context ctx, File apk, Sink sink) throws Exception {
+        MainActivity.skipNextAutoLock(ctx);
+        Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".files", apk);
+
+        Intent install = new Intent(Intent.ACTION_VIEW);
+        install.setDataAndType(uri, "application/vnd.android.package-archive");
+        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        if (ctx.getPackageManager().resolveActivity(install, PackageManager.MATCH_DEFAULT_ONLY) == null) {
+            throw new ActivityNotFoundException("No Android package installer is available");
         }
+
+        new Handler(Looper.getMainLooper())
+            .post(
+                () -> {
+                    try {
+                        ctx.startActivity(install);
+                        sink.emit(progress("prompt", 100));
+                    } catch (Exception e) {
+                        sink.emit(err("install-fail", usefulMessage(e)));
+                    }
+                });
     }
 
-    private static void installView(Context ctx, File apk) {
-        MainActivity.skipNextAutoLock(ctx);
-        Uri uri =
-            FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".files", apk);
-        Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setDataAndType(uri, "application/vnd.android.package-archive");
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        ctx.startActivity(i);
+    private static void startOnMain(Context ctx, Intent intent, Sink sink, String fallback) {
+        new Handler(Looper.getMainLooper())
+            .post(
+                () -> {
+                    try {
+                        ctx.startActivity(intent);
+                    } catch (Exception e) {
+                        sink.emit(err("install-fail", fallback + ": " + usefulMessage(e)));
+                    }
+                });
     }
 
     private static void download(String src, File dest, Sink sink) throws Exception {
@@ -284,15 +309,15 @@ public final class AppUpdate {
         while (code >= 300 && code < 400 && hops < 8) {
             String next = c.getHeaderField("Location");
             c.disconnect();
-            if (next == null || next.isEmpty()) throw new Exception("redirect");
+            if (next == null || next.isEmpty()) throw new Exception("GitHub redirect was missing a target");
             c = open(next);
             code = c.getResponseCode();
             hops++;
         }
-        if (code != 200) throw new Exception("HTTP " + code);
-        long total = c.getContentLength();
+        if (code != 200) throw new Exception("Download failed: HTTP " + code);
+        long total = c.getContentLengthLong();
         try (InputStream in = c.getInputStream();
-            FileOutputStream out = new FileOutputStream(dest)) {
+            FileOutputStream out = new FileOutputStream(dest, false)) {
             byte[] buf = new byte[64 * 1024];
             long got = 0;
             int n;
@@ -301,11 +326,12 @@ public final class AppUpdate {
                 out.write(buf, 0, n);
                 got += n;
                 int pct = total > 0 ? (int) Math.min(99, (got * 100) / total) : 0;
-                if (pct != last && pct % 5 == 0) {
+                if (pct != last && (pct % 5 == 0 || pct >= 99)) {
                     last = pct;
                     sink.emit(progress("download", pct));
                 }
             }
+            out.getFD().sync();
         } finally {
             c.disconnect();
         }
@@ -315,10 +341,11 @@ public final class AppUpdate {
         HttpURLConnection c = open(src);
         try {
             int code = c.getResponseCode();
-            if (code != 200) throw new Exception("HTTP " + code);
-            InputStream in = c.getInputStream();
-            byte[] raw = readAll(in);
-            return new JSONObject(new String(raw, StandardCharsets.UTF_8));
+            if (code != 200) throw new Exception("GitHub release check failed: HTTP " + code);
+            try (InputStream in = c.getInputStream()) {
+                byte[] raw = readAll(in);
+                return new JSONObject(new String(raw, StandardCharsets.UTF_8));
+            }
         } finally {
             c.disconnect();
         }
@@ -348,7 +375,8 @@ public final class AppUpdate {
         String tag = rel.optString("tag_name", "");
         int n = firstInt(body, "versionCode\\s*:?\\s*(\\d+)");
         if (n > 0) return n;
-        return firstInt(name + " " + tag + " " + body, "2\\.1\\.(\\d+)");
+        n = firstInt(name + " " + tag + " " + body, "2\\.[0-9]+\\.(\\d+)");
+        return n;
     }
 
     private static int firstInt(String text, String regex) {
@@ -365,6 +393,16 @@ public final class AppUpdate {
     private static String apkUrl(JSONObject rel) {
         JSONArray assets = rel.optJSONArray("assets");
         if (assets != null) {
+            // Prefer the stable public filename even if GitHub returns app-debug.apk first.
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject a = assets.optJSONObject(i);
+                if (a == null) continue;
+                String name = a.optString("name", "");
+                if ("Kysmindset-2.apk".equals(name)) {
+                    String u = a.optString("browser_download_url", "");
+                    if (!u.isEmpty()) return u;
+                }
+            }
             for (int i = 0; i < assets.length(); i++) {
                 JSONObject a = assets.optJSONObject(i);
                 if (a == null) continue;
@@ -396,5 +434,11 @@ public final class AppUpdate {
         } catch (Exception ignored) {
         }
         return o.toString();
+    }
+
+    private static String usefulMessage(Exception e) {
+        if (e == null) return "Unknown update error";
+        String m = e.getMessage();
+        return m == null || m.trim().isEmpty() ? e.getClass().getSimpleName() : m;
     }
 }
