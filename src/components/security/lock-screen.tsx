@@ -23,7 +23,6 @@ export function LockScreen() {
   const lockdown = useSecurity((s) => s.lockdown);
   const lastScan = useSecurity((s) => s.lastScan);
   const linkKbps = useSecurity((s) => s.linkKbps);
-  const droppedPackets = useSecurity((s) => s.droppedPackets);
   const score = useScore();
   const tone = ScoreTone(score.status);
   const [now, setNow] = useState(() => new Date());
@@ -136,7 +135,7 @@ export function LockScreen() {
             </span>
           )}
           <span className={connection.secure && !killSwitch ? "text-emerald" : "text-amber"}>
-            {killSwitch ? "Air gap" : connection.secure ? "TLS" : "Open"}
+            {killSwitch ? "Watching" : connection.secure ? "TLS" : "Open"}
           </span>
           {battery != null ? (
             <span>
@@ -186,10 +185,10 @@ export function LockScreen() {
         {killSwitch ? (
           <LockCard
             delay={200}
-            tone="red"
+            tone="cyan"
             kicker="Protection"
-            title="Air gap on"
-            detail={`${droppedPackets.toLocaleString()} packets dropped · 0 KB/s`}
+            title="Watching connections"
+            detail="Open the app — Network lists every app"
           />
         ) : null}
         {lockdown ? (
@@ -246,7 +245,7 @@ export function LockScreen() {
 
       <div className="relative z-10 mt-auto flex flex-col items-center gap-2.5 pb-2 pt-4">
         <p className="text-center font-mono text-2xs text-subtle">
-          {killSwitch ? "Air gap · 0 KB/s" : `Live · ${linkKbps} KB/s`}
+          {killSwitch ? "Watching" : `Live · ${linkKbps} KB/s`}
           {" · "}
           {lastScan ? `Scan ${timeAgo(lastScan)}` : "No scan yet"}
           {settings.tamperProtection ? " · Tamper" : ""}

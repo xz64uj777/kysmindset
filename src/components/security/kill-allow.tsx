@@ -71,13 +71,13 @@ export function KillAllowPanel() {
     <Panel>
       <PanelHeader
         icon={<WifiOff className="size-4" />}
-        title="Do not block"
-        subtitle="These apps keep internet while Kill is on"
+        title="Always allow"
+        subtitle="These apps stay online even if you block everyone"
         iconClass="bg-emerald-dim text-emerald"
       />
       <p className="mb-3 text-micro text-muted">
         Tap an app below. You do not have to type a package name.
-        {killSwitch ? " Changes apply immediately." : " Arm Kill after you pick apps."}
+        {killSwitch ? " Changes apply immediately." : " Start Protection, then pick apps if you want an always-allow list."}
       </p>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {COMMON_APPS.map((a) => {

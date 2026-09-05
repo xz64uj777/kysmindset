@@ -10,7 +10,7 @@ Lock screen and security center for **this app**. Real telemetry. Real Grok anal
 
 - Hosts this page actually loaded (Resource Timing)
 - JS heap this page is using (when the browser exposes it)
-- Protection that fails **this app’s** third-party fetches (and a device VPN on the APK if you grant it)
+- On the APK, Start Protection watches every app’s connections. Tap Block on Network to cut an app. Internet still works unless you block it
 - PIN + fingerprint/face unlock for **this app**
 - Auto-lock of this app when you leave and come back (APK and home-screen install)
 - Device Admin on the APK: `lockNow` uses your **system** PIN. Home and Back always leave
@@ -20,7 +20,7 @@ Lock screen and security center for **this app**. Real telemetry. Real Grok anal
 ## What this is not
 
 - Not the original Kysmindset app (that one stays `app.kysmindset.security`)
-- Not an antivirus and not a phone-wide process list
+- Not an antivirus. Network on the APK is a connection watcher, not a virus scanner
 - The web build cannot cut Facebook or other apps
 - This app does not replace the Android lock screen
 - Device Admin cannot hide Home forever (that is Device Owner, which needs ADB)
@@ -33,7 +33,7 @@ Install **Kysmindset 2**. Original Kysmindset can stay installed.
 1. Open [Releases](https://github.com/xz64uj777/kysmindset/releases)
 2. Install `Kysmindset-2.apk`
 3. Open Kysmindset 2 → Config → **Enable Device Admin** if you want Lock phone now
-4. Overview → **Start Protection** asks for Android VPN if you want other apps offline
+4. Overview → **Start Protection**, allow the VPN, then open **Network** — you’ll see every app as it talks
 
 Later builds install **over** this one. Config → App update only installs an APK that is this app and this key.
 

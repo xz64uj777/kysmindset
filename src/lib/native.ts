@@ -99,6 +99,10 @@ type AndroidBridge = {
   setAllowlist?: (json: string) => void;
   getAllowlist?: () => string;
   requestStorage?: () => void;
+  listConnections?: () => string;
+  setConnBlocked?: (pkg: string, on: boolean) => void;
+  setAirGap?: (on: boolean) => void;
+  airGap?: () => boolean;
 };
 
 function androidBridge(): AndroidBridge | null {
@@ -189,6 +193,70 @@ export function readNativeKill(): boolean {
   if (!a || typeof a.killActive !== "function") return false;
   try {
     return Boolean(a.killActive());
+  } catch {
+    return false;
+  }
+}
+
+export type LiveConn = {
+  pkg: string;
+  name: string;
+  proto: string;
+  ip: string;
+  port: number;
+  host: string;
+  bytes: number;
+  packets: number;
+  lastAt: number;
+  blocked: boolean;
+};
+
+export type LiveNet = {
+  active: boolean;
+  airGap: boolean;
+  bytesIn: number;
+  bytesOut: number;
+  drops: number;
+  rows: LiveConn[];
+};
+
+export function readLiveNet(): LiveNet | null {
+  const a = androidBridge();
+  if (!a || typeof a.listConnections !== "function") return null;
+  try {
+    const parsed = JSON.parse(a.listConnections()) as LiveNet;
+    if (!parsed || !Array.isArray(parsed.rows)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function setConnBlocked(pkg: string, on: boolean) {
+  const a = androidBridge();
+  if (!a || typeof a.setConnBlocked !== "function") return;
+  try {
+    a.setConnBlocked(pkg, on);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setAirGap(on: boolean) {
+  const a = androidBridge();
+  if (!a || typeof a.setAirGap !== "function") return;
+  try {
+    a.setAirGap(on);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readAirGap(): boolean {
+  const a = androidBridge();
+  if (!a || typeof a.airGap !== "function") return false;
+  try {
+    return Boolean(a.airGap());
   } catch {
     return false;
   }

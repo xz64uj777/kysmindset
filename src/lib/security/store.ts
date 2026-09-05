@@ -332,8 +332,8 @@ export const useSecurity = create<SecurityState>()(
             next ? "Kill switch armed" : "Kill switch released",
             "Network",
             next
-              ? "Arming device air gap (VPN) if the APK can host it."
-              : "Releasing air gap.",
+              ? "Watching every app’s connections through the phone VPN."
+              : "Stopped watching.",
           ),
         });
         syncGuardFrom(get);
@@ -346,7 +346,7 @@ export const useSecurity = create<SecurityState>()(
                 get().history,
                 "VPN permission denied",
                 "Network",
-                "Air gap needs the Android VPN consent screen. Without it, only this app is blocked.",
+                "Protection needs the Android VPN consent screen.",
               ),
             });
             syncGuardFrom(get);
@@ -356,7 +356,7 @@ export const useSecurity = create<SecurityState>()(
                 get().history,
                 "Device VPN up",
                 "Network",
-                "Other apps should lose internet until Kill is released. Allow the VPN if Android asks.",
+                "Open Network to see every app. Block there to cut one.",
               ),
             });
           } else if (status === "app") {

@@ -356,7 +356,7 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public void setAllowlist(String json) {
             saveAllowlist(json == null ? "[]" : json);
-            runOnUiThread(MainActivity.this::restartVpnIfRunning);
+            ConnLog.get(MainActivity.this).reloadPolicy();
         }
 
         @JavascriptInterface
@@ -376,6 +376,27 @@ public class MainActivity extends FragmentActivity {
         @JavascriptInterface
         public boolean killActive() {
             return KillVpnService.active;
+        }
+
+        @JavascriptInterface
+        public String listConnections() {
+            return ConnLog.get(MainActivity.this).json();
+        }
+
+        @JavascriptInterface
+        public void setConnBlocked(String pkg, boolean on) {
+            if (pkg == null || pkg.trim().isEmpty()) return;
+            ConnLog.setBlocked(MainActivity.this, pkg.trim(), on);
+        }
+
+        @JavascriptInterface
+        public void setAirGap(boolean on) {
+            ConnLog.setAirGap(MainActivity.this, on);
+        }
+
+        @JavascriptInterface
+        public boolean airGap() {
+            return ConnLog.airGap(MainActivity.this);
         }
 
         @JavascriptInterface

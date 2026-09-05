@@ -11,8 +11,6 @@ import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 
-import java.io.FileInputStream;
-
 public class KillVpnService extends VpnService {
     public static final String ACTION_STOP = "app.kysmindset.security.STOP_VPN";
     public static final String ACTION_RESTART = "app.kysmindset.security.RESTART_VPN";
@@ -24,6 +22,7 @@ public class KillVpnService extends VpnService {
     public static volatile boolean active;
     private ParcelFileDescriptor tun;
     private volatile boolean running;
+    private VpnEngine engine;
 
     public static boolean wanted(Context ctx) {
         return ctx.getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_WANTED, false);
@@ -66,18 +65,21 @@ public class KillVpnService extends VpnService {
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26 && nm != null) {
             NotificationChannel ch =
-                new NotificationChannel(CH, "Air gap", NotificationManager.IMPORTANCE_LOW);
+                new NotificationChannel(CH, "Protection", NotificationManager.IMPORTANCE_LOW);
             nm.createNotificationChannel(ch);
         }
         Intent open = new Intent(this, MainActivity.class);
         PendingIntent pi =
             PendingIntent.getActivity(
                 this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        boolean air = ConnLog.airGap(this);
         int nAllow = allowCount();
         String text =
-            nAllow == 0
-                ? "Other apps blocked until Protection is stopped"
-                : nAllow + " app" + (nAllow == 1 ? "" : "s") + " allowed through";
+            air
+                ? (nAllow == 0
+                    ? "Blocking other apps — watching attempts"
+                    : nAllow + " app" + (nAllow == 1 ? "" : "s") + " allowed, rest blocked")
+                : "Watching every connection";
         Notification.Builder b =
             Build.VERSION.SDK_INT >= 26
                 ? new Notification.Builder(this, CH)
@@ -116,8 +118,10 @@ public class KillVpnService extends VpnService {
         b.setMtu(1500);
         b.addAddress("10.8.0.2", 32);
         b.addRoute("0.0.0.0", 0);
+        b.addDnsServer("1.1.1.1");
+        b.addDnsServer("8.8.8.8");
         try {
-            b.addAddress("fd00::2", 128);
+            b.addAddress("fd00:8::2", 128);
             b.addRoute("::", 0);
         } catch (Exception ignored) {
         }
@@ -125,42 +129,25 @@ public class KillVpnService extends VpnService {
             b.addDisallowedApplication(getPackageName());
         } catch (Exception ignored) {
         }
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String raw = prefs.getString(KEY_ALLOW, "");
-        if (raw != null) {
-            for (String pkg : raw.split("\n")) {
-                String p = pkg.trim();
-                if (p.isEmpty() || p.equals(getPackageName())) continue;
-                try {
-                    b.addDisallowedApplication(p);
-                } catch (Exception ignored) {
-                }
-            }
-        }
         b.setBlocking(true);
         tun = b.establish();
         if (tun == null) return;
         running = true;
         active = true;
         setWanted(this, true);
-        Thread t =
-            new Thread(
-                () -> {
-                    try (FileInputStream in = new FileInputStream(tun.getFileDescriptor())) {
-                        byte[] buf = new byte[32767];
-                        while (running) {
-                            int n = in.read(buf);
-                            if (n <= 0) break;
-                        }
-                    } catch (Exception ignored) {
-                    }
-                },
-                "kys-drop");
-        t.start();
+        ConnLog log = ConnLog.get(this);
+        log.reloadPolicy();
+        log.clear();
+        engine = new VpnEngine(this, tun, log);
+        engine.start();
     }
 
     private void stopTunnel() {
         running = false;
+        if (engine != null) {
+            engine.stop();
+            engine = null;
+        }
         try {
             if (tun != null) tun.close();
         } catch (Exception ignored) {

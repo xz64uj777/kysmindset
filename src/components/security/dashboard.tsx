@@ -45,7 +45,6 @@ export function Dashboard() {
   const lock = useSecurity((s) => s.lock);
   const killSwitch = useSecurity((s) => s.killSwitch);
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
-  const droppedPackets = useSecurity((s) => s.droppedPackets);
   const linkKbps = useSecurity((s) => s.linkKbps);
   const lockdown = useSecurity((s) => s.lockdown);
   const toggleLockdown = useSecurity((s) => s.toggleLockdown);
@@ -204,13 +203,13 @@ export function Dashboard() {
         {hasAndroidBridge() ? null : <InstallBar />}
 
         {killSwitch ? (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red/30 bg-red-dim px-3 py-3">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-cyan/30 bg-cyan-dim px-3 py-3">
             <div className="flex min-w-0 items-start gap-2">
-              <WifiOff className="mt-0.5 size-4 shrink-0 text-red" />
+              <Wifi className="mt-0.5 size-4 shrink-0 text-cyan" />
               <div>
-                <p className="text-sm font-semibold text-red">Protection on — air gap</p>
-                <p className="text-xs text-red/80">
-                  Other apps lose internet except the ones you allow in Config. {droppedPackets.toLocaleString()} app requests dropped · 0 KB/s
+                <p className="text-sm font-semibold text-cyan">Protection on — watching every connection</p>
+                <p className="text-xs text-cyan/80">
+                  Open Network. Tap Block on an app to cut it.
                 </p>
               </div>
             </div>
@@ -220,9 +219,9 @@ export function Dashboard() {
                 toggleKillSwitch();
                 toast.success("Protection off.");
               }}
-              className="shrink-0 rounded-md border border-red/40 bg-elevated px-3 py-1.5 text-xs font-medium text-fg hover:bg-white/10"
+              className="shrink-0 rounded-md border border-cyan/40 bg-elevated px-3 py-1.5 text-xs font-medium text-fg hover:bg-white/10"
             >
-              Release
+              Stop
             </button>
           </div>
         ) : null}

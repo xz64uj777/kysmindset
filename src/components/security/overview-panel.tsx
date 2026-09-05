@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { readNativeKill } from "@/lib/native";
+import { readNativeKill, readAirGap, setAirGap, readLiveNet } from "@/lib/native";
 import { useScore, useSecurity } from "@/lib/security/store";
 import { loadVpnAllow } from "@/lib/vpn-allow";
 import { cn, timeAgo } from "@/lib/utils";
@@ -23,11 +23,15 @@ export function OverviewPanel() {
   const toggleKillSwitch = useSecurity((s) => s.toggleKillSwitch);
   const [deviceVpn, setDeviceVpn] = useState(() => readNativeKill());
   const [vpnAllowN, setVpnAllowN] = useState(() => loadVpnAllow().length);
+  const [air, setAir] = useState(() => readAirGap());
+  const [liveN, setLiveN] = useState(0);
   useEffect(() => {
     const sync = () => {
       const n = readNativeKill();
       setDeviceVpn(n);
       setVpnAllowN(loadVpnAllow().length);
+      setAir(readAirGap());
+      setLiveN(readLiveNet()?.rows.length ?? 0);
       if (n && !useSecurity.getState().killSwitch) {
         useSecurity.setState({ killSwitch: true });
       }
@@ -87,23 +91,21 @@ export function OverviewPanel() {
         <PanelHeader
           icon={<ShieldCheck className="size-4" />}
           title="Protection"
-          subtitle="Cuts other apps’ internet. Apps you allow in Config still get through."
+          subtitle="Watches every app’s internet. Block from Network."
         />
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-md border border-line bg-elevated p-3">
             <div className="text-2xs uppercase tracking-wide text-subtle">Phone VPN</div>
             <div className={cn("mt-1 text-sm font-semibold", deviceVpn ? "text-emerald" : "text-muted")}>
-              {deviceVpn ? "On" : "Off"}
+              {deviceVpn ? "Watching" : "Off"}
             </div>
           </div>
           <div className="rounded-md border border-line bg-elevated p-3">
-            <div className="text-2xs uppercase tracking-wide text-subtle">App guard</div>
-            <div className={cn("mt-1 text-sm font-semibold", killSwitch ? "text-emerald" : "text-muted")}>
-              {killSwitch ? "On" : "Off"}
-            </div>
+            <div className="text-2xs uppercase tracking-wide text-subtle">Connections</div>
+            <div className="mt-1 text-sm font-semibold text-fg">{liveN}</div>
           </div>
           <div className="rounded-md border border-line bg-elevated p-3">
-            <div className="text-2xs uppercase tracking-wide text-subtle">Do not block</div>
+            <div className="text-2xs uppercase tracking-wide text-subtle">Always allow</div>
             <div className="mt-1 text-sm font-semibold text-fg">
               {vpnAllowN} app{vpnAllowN === 1 ? "" : "s"}
             </div>
@@ -123,10 +125,31 @@ export function OverviewPanel() {
           </Button>
           <span className="text-2xs text-subtle">
             {killSwitch
-              ? "Protection is on. Android may show an air-gap VPN notification."
-              : "Turns on the phone VPN. Pick apps that should stay online in Config first if you want."}
+              ? "Open Network to see every app as it talks."
+              : "Turns on the phone VPN. Other apps keep internet unless you block them."}
           </span>
         </div>
+        {killSwitch ? (
+          <label className="mt-3 flex items-start gap-2 rounded-md border border-line bg-elevated p-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={air}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setAir(on);
+                setAirGap(on);
+                toast.message(on ? "Only always-allow apps stay online." : "All apps online unless you block them.");
+              }}
+            />
+            <span>
+              <span className="block text-sm text-fg">Block everyone except always-allow</span>
+              <span className="block text-micro text-muted">
+                Like the old air gap. Attempts still show on Network.
+              </span>
+            </span>
+          </label>
+        ) : null}
       </Panel>
       <Panel>
         <PanelHeader icon={<Radar className="size-4" />} title="AI Security Engine" subtitle="Analyzes, learns & decides" />
@@ -138,7 +161,7 @@ export function OverviewPanel() {
         </div>
         <p className="mt-3 text-micro text-muted">
           {connection.secure ? "Secure" : "Insecure"} link
-          {killSwitch ? " · Air gap" : ""} · {allowlist.length} trusted · {indicators.length} learned indicators
+          {killSwitch ? " · Watching" : ""} · {allowlist.length} trusted · {indicators.length} learned indicators
         </p>
       </Panel>
       <Panel>

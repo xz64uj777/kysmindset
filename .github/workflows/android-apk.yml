@@ -80,7 +80,8 @@ jobs:
             PIN 1234. Play Protect may warn — Install anyway.
 
             Lock phone now: Android lock first, then this app’s PIN.
-            Start Protection comes back after reboot if Auto Restart is on.
+            Start Protection watches every app’s connections. Block from Network.
+            Optional: block everyone except always-allow.
           files: |
             android/app/build/outputs/apk/debug/Kysmindset-2.apk
             android/app/build/outputs/apk/debug/app-debug.apk
